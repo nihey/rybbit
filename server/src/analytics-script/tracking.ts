@@ -1,4 +1,4 @@
-import { BasePayload, ScriptConfig, TrackingPayload, WebVitalsData, SessionReplayBatch } from "./types.js";
+import { BasePayload, ScriptConfig, TrackingPayload, WebVitalsData, SessionReplayBatch, ButtonClickProperties, CopyProperties, FormSubmitProperties, InputChangeProperties } from "./types.js";
 import { findMatchingPattern } from "./utils.js";
 import { SessionReplayRecorder } from "./sessionReplay.js";
 
@@ -18,7 +18,7 @@ export class Tracker {
 
   private loadUserId(): void {
     try {
-      const storedUserId = localStorage.getItem("rybbit-user-id");
+      const storedUserId = localStorage.getItem(`${this.config.namespace}-user-id`);
       if (storedUserId) {
         this.customUserId = storedUserId;
       }
@@ -121,12 +121,12 @@ export class Tracker {
       return; // Skip tracking
     }
 
+    const typesWithProperties = ["custom_event", "outbound", "error", "button_click", "copy", "form_submit", "input_change"];
     const payload: TrackingPayload = {
       ...basePayload,
       type: eventType,
       event_name: eventName,
-      properties:
-        eventType === "custom_event" || eventType === "outbound" || eventType === "error"
+      properties: typesWithProperties.includes(eventType)
           ? JSON.stringify(properties)
           : undefined,
     };
@@ -228,7 +228,23 @@ export class Tracker {
     this.track("error", error.name || "Error", errorProperties);
   }
 
-  identify(userId: string): void {
+  trackButtonClick(properties: ButtonClickProperties): void {
+    this.track("button_click", "", properties);
+  }
+
+  trackCopy(properties: CopyProperties): void {
+    this.track("copy", "", properties);
+  }
+
+  trackFormSubmit(properties: FormSubmitProperties): void {
+    this.track("form_submit", "", properties);
+  }
+
+  trackInputChange(properties: InputChangeProperties): void {
+    this.track("input_change", "", properties);
+  }
+
+  identify(userId: string, traits?: Record<string, unknown>): void {
     if (typeof userId !== "string" || userId.trim() === "") {
       console.error("User ID must be a non-empty string");
       return;
@@ -236,10 +252,13 @@ export class Tracker {
 
     this.customUserId = userId.trim();
     try {
-      localStorage.setItem("rybbit-user-id", this.customUserId);
+      localStorage.setItem(`${this.config.namespace}-user-id`, this.customUserId);
     } catch (e) {
       console.warn("Could not persist user ID to localStorage");
     }
+
+    // Send identify event to server (creates alias and stores traits)
+    this.sendIdentifyEvent(this.customUserId, traits, true);
 
     // Update session replay recorder with new user ID
     if (this.sessionReplayRecorder) {
@@ -247,10 +266,50 @@ export class Tracker {
     }
   }
 
+  setTraits(traits: Record<string, unknown>): void {
+    if (!traits || typeof traits !== "object") {
+      console.error("Traits must be an object");
+      return;
+    }
+
+    const userId = this.customUserId;
+    if (!userId) {
+      console.warn("Cannot set traits without identifying user first. Call identify() first.");
+      return;
+    }
+
+    this.sendIdentifyEvent(userId, traits, false);
+  }
+
+  private async sendIdentifyEvent(
+    userId: string,
+    traits?: Record<string, unknown>,
+    isNewIdentify: boolean = true
+  ): Promise<void> {
+    try {
+      await fetch(`${this.config.analyticsHost}/identify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          site_id: this.config.siteId,
+          user_id: userId,
+          traits: traits,
+          is_new_identify: isNewIdentify,
+        }),
+        mode: "cors",
+        keepalive: true,
+      });
+    } catch (error) {
+      console.error("Failed to send identify event:", error);
+    }
+  }
+
   clearUserId(): void {
     this.customUserId = null;
     try {
-      localStorage.removeItem("rybbit-user-id");
+      localStorage.removeItem(`${this.config.namespace}-user-id`);
     } catch (e) {
       // localStorage not available
     }

@@ -1,11 +1,11 @@
 import { ArrowRight, Crown, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import React, { ReactNode, useMemo, useRef, useEffect, useState } from "react";
-import { useCurrentSite } from "../api/admin/sites";
+import { useCurrentSite } from "../api/admin/hooks/useSites";
 import { DEFAULT_EVENT_LIMIT } from "../lib/subscription/constants";
 import { Button } from "./ui/button";
 import { authClient } from "../lib/auth";
-import { DEMO_HOSTNAME } from "../lib/const";
+import { DEMO_HOSTNAME, IS_CLOUD } from "../lib/const";
 import { DateTime } from "luxon";
 
 interface DisabledOverlayProps {
@@ -23,7 +23,7 @@ function ownerMessage(message: string, featurePath?: string, requiredPlan?: "pro
   return (
     <div className="bg-neutral-900 rounded-lg  border border-neutral-700 shadow-xl flex flex-col gap-3 p-4">
       <div className="flex gap-3">
-        <Crown className="h-5 w-5 text-amber-500 flex-shrink-0" />
+        <Crown className="h-5 w-5 text-amber-500 shrink-0" />
         <div className="flex-1 space-y-1">
           <p className="text-sm text-muted-foreground">
             Upgrade to{" "}
@@ -32,7 +32,7 @@ function ownerMessage(message: string, featurePath?: string, requiredPlan?: "pro
           </p>
           {featurePath && (
             <Link
-              href={`https://${DEMO_HOSTNAME}/21/${featurePath}`}
+              href={`https://${DEMO_HOSTNAME}/1/${featurePath}`}
               target="_blank"
               className="text-sm text-neutral-100 hover:underline flex items-center gap-1"
             >
@@ -55,7 +55,7 @@ function userMessage(message: string, featurePath?: string) {
   return (
     <div className="bg-neutral-900 rounded-lg  border border-neutral-700 shadow-xl flex flex-col gap-3 p-4">
       <div className="flex gap-3">
-        <Crown className="h-5 w-5 text-amber-500 flex-shrink-0" />
+        <Crown className="h-5 w-5 text-amber-500 shrink-0" />
         <div className="flex-1 space-y-1">
           <p className="text-sm text-muted-foreground">
             Ask your organization owner to upgrade to <span className="font-medium text-foreground">Pro</span> to unlock{" "}
@@ -63,7 +63,7 @@ function userMessage(message: string, featurePath?: string) {
           </p>
           {featurePath && (
             <Link
-              href={`https://${DEMO_HOSTNAME}/21/${featurePath}`}
+              href={`https://${DEMO_HOSTNAME}/1/${featurePath}`}
               target="_blank"
               className="text-sm text-neutral-100 hover:underline flex items-center gap-1"
             >
@@ -99,6 +99,9 @@ export const DisabledOverlay: React.FC<DisabledOverlayProps> = ({
   const [overlayRemoved, setOverlayRemoved] = useState(false);
 
   const disabled = useMemo(() => {
+    if (!IS_CLOUD) {
+      return false;
+    }
     if (requiredPlan === "pro") {
       if (organization?.createdAt && DateTime.fromJSDate(organization?.createdAt) < DateTime.fromISO("2025-09-19")) {
         return false;
@@ -113,12 +116,12 @@ export const DisabledOverlay: React.FC<DisabledOverlayProps> = ({
     if (!disabled || !containerRef.current || !contentRef.current) return;
 
     // Watch for overlay removal
-    const containerObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.removedNodes.forEach((node) => {
+    const containerObserver = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.removedNodes.forEach(node => {
           if (node === overlayRef.current) {
             // Force re-render to restore overlay
-            setOverlayRemoved((prev) => !prev);
+            setOverlayRemoved(prev => !prev);
           }
         });
       });
@@ -168,7 +171,7 @@ export const DisabledOverlay: React.FC<DisabledOverlayProps> = ({
     };
   }, [disabled, overlayRemoved, blur]);
 
-  if (!disabled || data?.user?.role === "admin" || globalThis.location.hostname === DEMO_HOSTNAME) {
+  if (!disabled || data?.user?.role === "admin" || globalThis?.location?.hostname === DEMO_HOSTNAME) {
     return <>{children}</>;
   }
 

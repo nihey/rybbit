@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAdminSites, AdminSiteData } from "@/api/admin/getAdminSites";
+import { useAdminSites } from "@/api/admin/hooks/useAdminSites";
+import { AdminSiteData } from "@/api/admin/endpoints";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -67,7 +68,7 @@ export function Sites() {
         header: ({ column }) => <SortableHeader column={column}>Domain</SortableHeader>,
         cell: ({ row }) => (
           <div className="font-medium flex items-center gap-2">
-            <Favicon domain={row.original.domain} className="w-5 h-5 flex-shrink-0" />
+            <Favicon domain={row.original.domain} className="w-5 h-5 shrink-0" />
             <Link href={`https://${row.original.domain}`} target="_blank" className="hover:underline">
               {row.getValue("domain")}
             </Link>
@@ -152,7 +153,7 @@ export function Sites() {
         <SearchInput placeholder="Search by domain or owner email..." value={searchQuery} onChange={setSearchQuery} />
       </div>
 
-      <div className="rounded-md border border-neutral-700">
+      <div className="rounded-md border border-neutral-100 dark:border-neutral-800">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (

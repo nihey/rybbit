@@ -14,7 +14,6 @@ export interface SiteConfigData {
   blockBots: boolean;
   excludedIPs: string[];
   excludedCountries: string[];
-  apiKey?: string | null;
   privateLinkKey?: string | null;
   sessionReplay: boolean;
   webVitals: boolean;
@@ -24,6 +23,10 @@ export interface SiteConfigData {
   trackInitialPageView: boolean;
   trackSpaNavigation: boolean;
   trackIp: boolean;
+  trackButtonClicks: boolean;
+  trackCopy: boolean;
+  trackFormInteractions: boolean;
+  tags: string[];
 }
 
 class SiteConfig {
@@ -34,7 +37,10 @@ class SiteConfig {
    * Helper to determine if the input is a numeric siteId or string id
    */
   private isNumericId(id: string | number): boolean {
-    return typeof id === "number" || /^\d+$/.test(id);
+    if (String(id).length > 4) {
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -61,7 +67,6 @@ class SiteConfig {
           blockBots: sites.blockBots,
           excludedIPs: sites.excludedIPs,
           excludedCountries: sites.excludedCountries,
-          apiKey: sites.apiKey,
           privateLinkKey: sites.privateLinkKey,
           sessionReplay: sites.sessionReplay,
           webVitals: sites.webVitals,
@@ -71,6 +76,10 @@ class SiteConfig {
           trackInitialPageView: sites.trackInitialPageView,
           trackSpaNavigation: sites.trackSpaNavigation,
           trackIp: sites.trackIp,
+          trackButtonClicks: sites.trackButtonClicks,
+          trackCopy: sites.trackCopy,
+          trackFormInteractions: sites.trackFormInteractions,
+          tags: sites.tags,
         })
         .from(sites)
         .where(isNumeric ? eq(sites.siteId, Number(siteIdOrId)) : eq(sites.id, String(siteIdOrId)))
@@ -89,16 +98,19 @@ class SiteConfig {
         blockBots: site.blockBots === undefined ? true : site.blockBots,
         excludedIPs: Array.isArray(site.excludedIPs) ? site.excludedIPs : [],
         excludedCountries: Array.isArray(site.excludedCountries) ? site.excludedCountries : [],
-        apiKey: site.apiKey,
         privateLinkKey: site.privateLinkKey,
         sessionReplay: site.sessionReplay || false,
         webVitals: site.webVitals || false,
         trackErrors: site.trackErrors || false,
-        trackOutbound: site.trackOutbound || true,
-        trackUrlParams: site.trackUrlParams || true,
-        trackInitialPageView: site.trackInitialPageView || true,
-        trackSpaNavigation: site.trackSpaNavigation || true,
+        trackOutbound: site.trackOutbound ?? true,
+        trackUrlParams: site.trackUrlParams ?? true,
+        trackInitialPageView: site.trackInitialPageView ?? true,
+        trackSpaNavigation: site.trackSpaNavigation ?? true,
         trackIp: site.trackIp || false,
+        trackButtonClicks: site.trackButtonClicks || false,
+        trackCopy: site.trackCopy || false,
+        trackFormInteractions: site.trackFormInteractions || false,
+        tags: Array.isArray(site.tags) ? site.tags : [],
       };
 
       this.cache.set(cacheKey, {
@@ -149,7 +161,6 @@ class SiteConfig {
         saltUserIds: config.saltUserIds,
         blockBots: config.blockBots,
         excludedIPs: config.excludedIPs,
-        apiKey: config.apiKey,
         createdBy: "", // This would need to be provided
       });
     } catch (error) {

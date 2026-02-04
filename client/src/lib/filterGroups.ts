@@ -26,7 +26,7 @@ const BASE_FILTERS: FilterParameter[] = [
   "lon",
 ];
 
-export const SESSION_PAGE_FILTERS: FilterParameter[] = [...BASE_FILTERS, "entry_page", "exit_page", "event_name"];
+export const SESSION_PAGE_FILTERS: FilterParameter[] = [...BASE_FILTERS, "pathname", "entry_page", "exit_page", "event_name"];
 
 export const EVENT_FILTERS: FilterParameter[] = [
   ...BASE_FILTERS,
@@ -38,6 +38,8 @@ export const EVENT_FILTERS: FilterParameter[] = [
 ];
 
 export const GOALS_PAGE_FILTERS: FilterParameter[] = [...BASE_FILTERS];
+
+export const FUNNEL_PAGE_FILTERS: FilterParameter[] = [...BASE_FILTERS];
 
 export const USER_PAGE_FILTERS: FilterParameter[] = [
   "hostname",
@@ -52,8 +54,6 @@ export const USER_PAGE_FILTERS: FilterParameter[] = [
   "device_type",
   "referrer",
   "user_id",
-  "lat",
-  "lon",
 ];
 
 export const JOURNEY_PAGE_FILTERS: FilterParameter[] = [

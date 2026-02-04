@@ -1,7 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../../db/clickhouse/clickhouse.js";
-import { getTimeStatement, processResults, getFilterStatement } from "../utils.js";
+import { getTimeStatement, processResults } from "../utils/utils.js";
 import { FilterParams } from "@rybbit/shared";
+import { getFilterStatement } from "../utils/getFilterStatement.js";
 
 export type GetOutboundLinksResponse = {
   url: string;
@@ -11,17 +12,17 @@ export type GetOutboundLinksResponse = {
 
 export interface GetOutboundLinksRequest {
   Params: {
-    site: string;
+    siteId: string;
   };
   Querystring: FilterParams<{}>;
 }
 
 export async function getOutboundLinks(req: FastifyRequest<GetOutboundLinksRequest>, res: FastifyReply) {
-  const { startDate, endDate, timeZone, filters, pastMinutesStart, pastMinutesEnd } = req.query;
-  const site = req.params.site;
+  const { filters } = req.query;
+  const site = req.params.siteId;
 
   const timeStatement = getTimeStatement(req.query);
-  const filterStatement = filters ? getFilterStatement(filters) : "";
+  const filterStatement = filters ? getFilterStatement(filters, Number(site), timeStatement) : "";
 
   const query = `
     SELECT

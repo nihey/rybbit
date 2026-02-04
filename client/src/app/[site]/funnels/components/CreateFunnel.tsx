@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { FunnelStep, useGetFunnel, useSaveFunnel } from "../../../../api/analytics/funnels/useGetFunnel";
+import { toast } from "@/components/ui/sonner";
+import { useGetFunnel, useSaveFunnel } from "../../../../api/analytics/hooks/funnels/useGetFunnel";
+import { FunnelStep } from "../../../../api/analytics/endpoints";
 import { FunnelForm } from "./FunnelForm";
 
 export function CreateFunnelDialog() {

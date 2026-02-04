@@ -87,7 +87,7 @@ services:
       dockerfile: ./server/Dockerfile
     environment:
       - NODE_ENV=production
-      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST:-http://clickhouse:8123}
       - CLICKHOUSE_DB=${CLICKHOUSE_DB:-analytics}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-frog}
       - POSTGRES_HOST=postgres
@@ -119,16 +119,15 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-rybbit}
-      # Redis configuration
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
-      # Axiom logging configuration (optional)
-      - AXIOM_DATASET=${AXIOM_DATASET}
-      - AXIOM_TOKEN=${AXIOM_TOKEN}
       - MAPBOX_TOKEN=${MAPBOX_TOKEN}
       - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY}
       - IPAPI_KEY=${IPAPI_KEY}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
     depends_on:
       clickhouse:
         condition: service_healthy

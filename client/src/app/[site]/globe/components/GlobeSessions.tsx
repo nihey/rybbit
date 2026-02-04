@@ -1,10 +1,11 @@
-import { ArrowRight, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { getTimezone } from "@/lib/store";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { DateTime } from "luxon";
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { VisuallyHidden } from "radix-ui";
-import { useCurrentSite } from "../../../../api/admin/sites";
-import { GetSessionsResponse, useGetSessionsInfinite } from "../../../../api/analytics/userSessions";
+import { useCurrentSite } from "../../../../api/admin/hooks/useSites";
+import { useGetSessionsInfinite } from "../../../../api/analytics/hooks/useGetUserSessions";
+import { GetSessionsResponse } from "../../../../api/analytics/endpoints";
 import { Avatar, generateName } from "../../../../components/Avatar";
 import { Channel } from "../../../../components/Channel";
 import { EventIcon, PageviewIcon } from "../../../../components/EventIcons";
@@ -20,44 +21,35 @@ import { Button } from "../../../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 import { formatShortDuration, hour12, userLocale } from "../../../../lib/dateTimeUtils";
-import { cn, formatter } from "../../../../lib/utils";
-
-// Function to truncate path for display
-function truncatePath(path: string, maxLength: number = 32) {
-  if (!path) return "-";
-  if (path.length <= maxLength) return path;
-
-  // Keep the beginning of the path with ellipsis
-  return `${path.substring(0, maxLength)}...`;
-}
+import { cn, formatter, truncateString } from "../../../../lib/utils";
 
 function SessionCardSkeleton() {
   return (
-    <div className="rounded-lg bg-neutral-850 border border-neutral-800 overflow-hidden p-2 space-y-2 animate-pulse">
-      <div className="flex justify-between border-b border-neutral-700 pb-2">
+    <div className="rounded-lg bg-white dark:bg-neutral-850 border border-neutral-200 dark:border-neutral-800 overflow-hidden p-2 space-y-2 animate-pulse">
+      <div className="flex justify-between border-b border-neutral-200 dark:border-neutral-700 pb-2">
         <div className="flex items-center gap-1.5">
-          <div className="h-4 w-4 bg-neutral-700 rounded-full" />
-          <div className="h-3 w-24 bg-neutral-700 rounded" />
+          <div className="h-4 w-4 bg-neutral-150 dark:bg-neutral-700 rounded-full" />
+          <div className="h-3 w-24 bg-neutral-150 dark:bg-neutral-700 rounded" />
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-20 bg-neutral-700 rounded" />
-          <div className="h-3 w-1 bg-neutral-700 rounded" />
-          <div className="h-3 w-10 bg-neutral-700 rounded hidden md:block" />
+          <div className="h-3 w-20 bg-neutral-150 dark:bg-neutral-700 rounded" />
+          <div className="h-3 w-1 bg-neutral-150 dark:bg-neutral-700 rounded" />
+          <div className="h-3 w-10 bg-neutral-150 dark:bg-neutral-700 rounded hidden md:block" />
         </div>
       </div>
       <div className="flex space-x-2 items-center">
-        <div className="h-4 w-4 bg-neutral-700 rounded-sm" />
-        <div className="h-4 w-4 bg-neutral-700 rounded-sm" />
-        <div className="h-4 w-4 bg-neutral-700 rounded-sm" />
-        <div className="h-4 w-4 bg-neutral-700 rounded-sm" />
-        <div className="h-[21px] w-12 bg-neutral-700 rounded-sm" />
-        <div className="h-[21px] w-12 bg-neutral-700 rounded-sm" />
-        <div className="h-[21px] w-16 bg-neutral-700 rounded-sm" />
+        <div className="h-4 w-4 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-4 w-4 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-4 w-4 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-4 w-4 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-[21px] w-12 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-[21px] w-12 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-[21px] w-16 bg-neutral-150 dark:bg-neutral-700 rounded-sm" />
       </div>
       <div className="items-center flex-1 min-w-0 hidden md:flex gap-2">
-        <div className="h-3 w-32 bg-neutral-700 rounded" />
-        <div className="h-3 w-3 bg-neutral-700 rounded" />
-        <div className="h-3 w-32 bg-neutral-700 rounded" />
+        <div className="h-3 w-32 bg-neutral-150 dark:bg-neutral-700 rounded" />
+        <div className="h-3 w-3 bg-neutral-150 dark:bg-neutral-700 rounded" />
+        <div className="h-3 w-32 bg-neutral-150 dark:bg-neutral-700 rounded" />
       </div>
     </div>
   );
@@ -65,8 +57,8 @@ function SessionCardSkeleton() {
 
 function SessionCard({ session, onClick }: { session: GetSessionsResponse[number]; onClick?: () => void }) {
   // Calculate session duration in minutes
-  const start = DateTime.fromSQL(session.session_start);
-  const end = DateTime.fromSQL(session.session_end);
+  const start = DateTime.fromSQL(session.session_start, { zone: "utc" });
+  const end = DateTime.fromSQL(session.session_end, { zone: "utc" });
   const totalSeconds = Math.floor(end.diff(start).milliseconds / 1000);
   const duration = formatShortDuration(totalSeconds);
   const siteId = useCurrentSite();
@@ -90,7 +82,7 @@ function SessionCard({ session, onClick }: { session: GetSessionsResponse[number
                 zone: "utc",
               })
                 .setLocale(userLocale)
-                .toLocal()
+                .setZone(getTimezone())
                 .toFormat(hour12 ? "MMM d, h:mm a" : "dd MMM, HH:mm")}
             </span>
             <span className="text-neutral-400">•</span>
@@ -136,7 +128,7 @@ function SessionCard({ session, onClick }: { session: GetSessionsResponse[number
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="text-xs text-neutral-400 truncate max-w-[200px] inline-block">
-              {truncatePath(session.entry_page)}
+              {truncateString(session.entry_page, 32)}
             </span>
           </TooltipTrigger>
           <TooltipContent>
@@ -144,12 +136,12 @@ function SessionCard({ session, onClick }: { session: GetSessionsResponse[number
           </TooltipContent>
         </Tooltip>
 
-        <ArrowRight className="mx-2 w-3 h-3 flex-shrink-0 text-neutral-400" />
+        <ArrowRight className="mx-2 w-3 h-3 shrink-0 text-neutral-400" />
 
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="text-xs text-neutral-400 truncate max-w-[200px] inline-block">
-              {truncatePath(session.exit_page)}
+              {truncateString(session.exit_page, 32)}
             </span>
           </TooltipTrigger>
           <TooltipContent>
@@ -162,7 +154,7 @@ function SessionCard({ session, onClick }: { session: GetSessionsResponse[number
 }
 
 export function GlobeSessions() {
-  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useGetSessionsInfinite();
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useGetSessionsInfinite({});
 
   const [expanded, setExpanded] = useState(false);
   const [selectedSession, setSelectedSession] = useState<GetSessionsResponse[number] | null>(null);
@@ -194,13 +186,20 @@ export function GlobeSessions() {
               <SessionCard key={session.session_id} session={session} onClick={() => setSelectedSession(session)} />
             ))
           )}
+          {isFetchingNextPage && <SessionCardSkeleton />}
         </div>
+        {/* Load more button */}
+        {hasNextPage && expanded && !isLoading && (
+          <Button onClick={() => fetchNextPage()} className="w-full" variant="ghost" size="sm">
+            Load more
+          </Button>
+        )}
       </div>
 
       <Dialog open={!!selectedSession} onOpenChange={open => !open && setSelectedSession(null)}>
-        <VisuallyHidden.Root>
+        <VisuallyHidden>
           <DialogTitle>Session Details</DialogTitle>
-        </VisuallyHidden.Root>
+        </VisuallyHidden>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-transparent border-0 p-0 shadow-none gap-0 [&>button]:hidden">
           {selectedSession && <FullSessionCard session={selectedSession} expandedByDefault />}
         </DialogContent>

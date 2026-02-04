@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
-import { processResults } from "./utils.js";
+import { processResults } from "./utils/utils.js";
 
 export interface SessionDetails {
   session_id: string;
@@ -54,7 +54,7 @@ export interface SessionPageviewsAndEvents {
 export interface GetSessionRequest {
   Params: {
     sessionId: string;
-    site: string;
+    siteId: string;
   };
   Querystring: {
     limit?: string;
@@ -64,7 +64,7 @@ export interface GetSessionRequest {
 }
 
 export async function getSession(req: FastifyRequest<GetSessionRequest>, res: FastifyReply) {
-  const { sessionId, site } = req.params;
+  const { sessionId, siteId } = req.params;
   const limit = req.query.limit ? parseInt(req.query.limit) : 100;
   const offset = req.query.offset ? parseInt(req.query.offset) : 0;
   const minutes = req.query.minutes ? parseInt(req.query.minutes) : undefined;
@@ -152,7 +152,7 @@ OFFSET {offset:Int32}
         query: sessionQuery,
         format: "JSONEachRow",
         query_params: {
-          siteId: Number(site),
+          siteId: Number(siteId),
           sessionId,
         },
       }),
@@ -160,7 +160,7 @@ OFFSET {offset:Int32}
         query: countQuery,
         format: "JSONEachRow",
         query_params: {
-          siteId: Number(site),
+          siteId: Number(siteId),
           sessionId,
         },
       }),
@@ -168,7 +168,7 @@ OFFSET {offset:Int32}
         query: eventsQuery,
         format: "JSONEachRow",
         query_params: {
-          siteId: Number(site),
+          siteId: Number(siteId),
           sessionId,
           limit,
           offset,

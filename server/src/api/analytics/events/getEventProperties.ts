@@ -1,7 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../../db/clickhouse/clickhouse.js";
-import { getTimeStatement, processResults, getFilterStatement } from "../utils.js";
+import { getTimeStatement, processResults } from "../utils/utils.js";
 import { FilterParams } from "@rybbit/shared";
+import { getFilterStatement } from "../utils/getFilterStatement.js";
 
 export type GetEventPropertiesResponse = {
   propertyKey: string;
@@ -11,16 +12,16 @@ export type GetEventPropertiesResponse = {
 
 export interface GetEventPropertiesRequest {
   Params: {
-    site: string;
+    siteId: string;
   };
   Querystring: FilterParams<{
-    eventName: string;
+    event_name: string;
   }>;
 }
 
 export async function getEventProperties(req: FastifyRequest<GetEventPropertiesRequest>, res: FastifyReply) {
-  const { startDate, endDate, timeZone, eventName, filters, pastMinutesStart, pastMinutesEnd } = req.query;
-  const site = req.params.site;
+  const { event_name: eventName, filters } = req.query;
+  const site = req.params.siteId;
 
   if (!eventName) {
     return res.status(400).send({ error: "Event name is required" });
@@ -28,7 +29,7 @@ export async function getEventProperties(req: FastifyRequest<GetEventPropertiesR
 
   const timeStatement = getTimeStatement(req.query);
 
-  const filterStatement = filters ? getFilterStatement(filters) : "";
+  const filterStatement = filters ? getFilterStatement(filters, Number(site), timeStatement) : "";
 
   const query = `
     SELECT

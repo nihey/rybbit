@@ -3,10 +3,11 @@
 import { useMemo } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { parseUtcTimestamp, userLocale } from "@/lib/dateTimeUtils";
-import { nivoTheme } from "@/lib/nivo";
+import { useNivoTheme } from "@/lib/nivo";
 import { formatter } from "@/lib/utils";
 import { DateTime } from "luxon";
 import { useWindowSize } from "@uidotdev/usehooks";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
 
 interface GrowthChartProps {
   data?: Array<{ createdAt: string }>;
@@ -17,7 +18,7 @@ interface GrowthChartProps {
 export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps) {
   const { width } = useWindowSize();
   const maxTicks = Math.round((width ?? Infinity) / 200);
-
+  const nivoTheme = useNivoTheme();
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
@@ -34,8 +35,9 @@ export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps
       .map(([date, count]) => ({
         x: date,
         y: count,
+        currentTime: DateTime.fromISO(date),
       }))
-      .sort((a, b) => a.x.localeCompare(b.x));
+      .sort((a, b) => a.currentTime.toMillis() - b.currentTime.toMillis());
 
     return [
       {
@@ -46,11 +48,19 @@ export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps
   }, [data]);
 
   if (data === undefined) {
-    return <div className="h-64 flex items-center justify-center text-neutral-400 text-sm">Loading...</div>;
+    return (
+      <div className="h-64 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+        Loading...
+      </div>
+    );
   }
 
   if (!data || data.length === 0) {
-    return <div className="h-64 flex items-center justify-center text-neutral-400 text-sm">No data available</div>;
+    return (
+      <div className="h-64 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
+        No data available
+      </div>
+    );
   }
 
   return (
@@ -58,7 +68,7 @@ export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps
       <ResponsiveLine
         data={chartData}
         theme={nivoTheme}
-        margin={{ top: 10, right: 10, bottom: 25, left: 50 }}
+        margin={{ top: 10, right: 10, bottom: 25, left: 40 }}
         xScale={{
           type: "time",
           format: "%Y-%m-%d",
@@ -71,7 +81,7 @@ export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps
           stacked: false,
           reverse: false,
         }}
-        enableGridX={false}
+        enableGridX={true}
         enableGridY={true}
         gridYValues={5}
         yFormat=" >-.0f"
@@ -105,19 +115,20 @@ export function GrowthChart({ data, color = "#3b82f6", title }: GrowthChartProps
         enableArea={false}
         sliceTooltip={({ slice }: any) => {
           const point = slice.points[0];
-          const currentTime = DateTime.fromSQL(point.data.x as string);
 
           return (
-            <div className="text-sm bg-neutral-850 p-3 rounded-md min-w-[100px] border border-neutral-750">
-              <div className="font-medium mb-1">{currentTime.toLocaleString(DateTime.DATE_MED)}</div>
-              <div className="flex justify-between gap-4 text-sm">
-                <div className="flex items-center gap-2 text-neutral-300">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: point.seriesColor }} />
-                  <span>New {title}</span>
+            <ChartTooltip>
+              <div className="p-3 min-w-[100px]">
+                <div className="font-medium mb-1">{point.data.currentTime.toLocaleString(DateTime.DATE_SHORT)}</div>
+                <div className="flex justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: point.seriesColor }} />
+                    <span>New {title}</span>
+                  </div>
+                  <div>{formatter(Number(point.data.yFormatted))}</div>
                 </div>
-                <div>{formatter(Number(point.data.yFormatted))}</div>
               </div>
-            </div>
+            </ChartTooltip>
           );
         }}
       />

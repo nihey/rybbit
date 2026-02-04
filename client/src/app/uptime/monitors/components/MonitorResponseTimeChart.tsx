@@ -1,14 +1,16 @@
 "use client";
 
 import { UptimeMonitor, useMonitorStats } from "@/api/uptime/monitors";
+import { ChartTooltip } from "@/components/charts/ChartTooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatChartDateTime, hour12, userLocale } from "@/lib/dateTimeUtils";
-import { nivoTheme } from "@/lib/nivo";
+import { getTimezone } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { ResponsiveLine } from "@nivo/line";
 import { DateTime } from "luxon";
 import { useEffect, useState } from "react";
+import { useNivoTheme } from "../../../../lib/nivo";
 import { UptimeBucketSelection } from "./UptimeBucketSelection";
 import { useUptimeStore } from "./uptimeStore";
 import { getHoursFromTimeRange } from "./utils";
@@ -73,17 +75,20 @@ export function MonitorResponseTimeChart({
     });
   };
 
+  const timezone = getTimezone();
+
   // Process data for the chart
   const processedData =
     statsData?.distribution
       ?.map((item: any) => {
         if (!item.hour) return null;
 
-        const timestamp = DateTime.fromSQL(item.hour, { zone: "utc" }).toLocal();
+        // Parse timestamp as UTC and keep in UTC for chart (useUTC: true)
+        const timestamp = DateTime.fromSQL(item.hour, { zone: "utc" });
         if (!timestamp.isValid) return null;
 
         const dataPoint: any = {
-          time: timestamp.toFormat("yyyy-MM-dd HH:mm:ss"),
+          time: timestamp.toFormat("yyyy-MM-dd HH:mm:ss"), // UTC format for chart
           timestamp: timestamp.toISO(), // Store ISO timestamp for proper timezone handling
           response_time_ms: item.avg_response_time,
           check_count: item.check_count || 0,
@@ -183,7 +188,8 @@ export function MonitorResponseTimeChart({
       : [];
 
   const formatXAxisValue = (value: Date) => {
-    const dt = DateTime.fromJSDate(value).setLocale(userLocale);
+    // Interpret JS Date as UTC, then convert to selected timezone
+    const dt = DateTime.fromJSDate(value, { zone: "utc" }).setZone(timezone).setLocale(userLocale);
 
     // Format based on bucket size
     switch (bucket) {
@@ -207,6 +213,7 @@ export function MonitorResponseTimeChart({
         return dt.toFormat(hour12 ? "MMM d" : "dd MMM");
     }
   };
+  const nivoTheme = useNivoTheme();
 
   return (
     <Card className="overflow-visible">
@@ -265,7 +272,7 @@ export function MonitorResponseTimeChart({
           <div className="h-[400px] w-full relative" style={{ overflow: "visible", zIndex: 10 }}>
             <ResponsiveLine
               data={data}
-              theme={{ ...nivoTheme }}
+              theme={nivoTheme}
               margin={{ top: 10, right: 20, bottom: 25, left: 50 }}
               defs={defs}
               fill={fill}
@@ -273,7 +280,7 @@ export function MonitorResponseTimeChart({
                 type: "time",
                 precision: "second",
                 format: "%Y-%m-%d %H:%M:%S",
-                useUTC: false,
+                useUTC: true,
               }}
               yScale={{
                 type: "linear",
@@ -360,11 +367,11 @@ export function MonitorResponseTimeChart({
                 "legends",
               ]}
               sliceTooltip={({ slice }: any) => {
-                const currentTime = DateTime.fromJSDate(new Date(slice.points[0].data.x));
+                const currentTime = DateTime.fromJSDate(new Date(slice.points[0].data.x), { zone: "utc" }).setZone(timezone);
 
                 // Find the corresponding data point to get failure info
                 const dataPoint = processedData.find(
-                  (p: any) => DateTime.fromISO(p.timestamp).toMillis() === currentTime.toMillis()
+                  (p: any) => DateTime.fromISO(p.timestamp).toMillis() === currentTime.toUTC().toMillis()
                 );
 
                 // For stacked HTTP charts, show cumulative total
@@ -374,42 +381,44 @@ export function MonitorResponseTimeChart({
                     : 0;
 
                 return (
-                  <div className="text-sm bg-neutral-850 p-3 rounded-md min-w-[200px] border border-neutral-750 text-neutral-200">
-                    {formatChartDateTime(currentTime, bucket)}
+                  <ChartTooltip>
+                    <div className="p-3 min-w-[200px]">
+                      <div className="mb-2">{formatChartDateTime(currentTime, bucket)}</div>
 
-                    {/* Show failure status if any failures */}
-                    {dataPoint && dataPoint.failure_percentage > 0 && (
-                      <div
-                        className={cn(
-                          "text-xs px-2 py-1 rounded mt-2 mb-2",
-                          dataPoint.failure_percentage >= 50
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-yellow-500/20 text-yellow-400"
-                        )}
-                      >
-                        {dataPoint.failure_count + dataPoint.timeout_count} of {dataPoint.check_count} checks failed (
-                        {dataPoint.failure_percentage.toFixed(1)}%)
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5 mt-2 text-xs">
-                      {slice.points.map((point: any) => (
-                        <div key={point.seriesId} className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: point.seriesColor }} />
-                            <span className="text-neutral-300">{point.seriesId}</span>
-                          </div>
-                          <span className="text-neutral-200">{formatTooltipValue(Number(point.data.yFormatted))}</span>
-                        </div>
-                      ))}
-                      {monitorType === "http" && (
-                        <div className="flex justify-between items-center pt-1.5 border-t border-neutral-700">
-                          <span className="text-neutral-300">Total</span>
-                          <span className="text-white font-medium">{formatTooltipValue(total)}</span>
+                      {/* Show failure status if any failures */}
+                      {dataPoint && dataPoint.failure_percentage > 0 && (
+                        <div
+                          className={cn(
+                            "text-xs px-2 py-1 rounded mb-2",
+                            dataPoint.failure_percentage >= 50
+                              ? "bg-red-500/20 text-red-400"
+                              : "bg-yellow-500/20 text-yellow-400"
+                          )}
+                        >
+                          {dataPoint.failure_count + dataPoint.timeout_count} of {dataPoint.check_count} checks failed (
+                          {dataPoint.failure_percentage.toFixed(1)}%)
                         </div>
                       )}
+
+                      <div className="space-y-1.5 text-xs">
+                        {slice.points.map((point: any) => (
+                          <div key={point.seriesId} className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: point.seriesColor }} />
+                              <span>{point.seriesId}</span>
+                            </div>
+                            <span className="font-medium">{formatTooltipValue(Number(point.data.yFormatted))}</span>
+                          </div>
+                        ))}
+                        {monitorType === "http" && (
+                          <div className="flex justify-between items-center pt-1.5 border-t border-neutral-100 dark:border-neutral-750">
+                            <span>Total</span>
+                            <span className="font-semibold">{formatTooltipValue(total)}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </ChartTooltip>
                 );
               }}
             />

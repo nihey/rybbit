@@ -1,17 +1,18 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../../db/clickhouse/clickhouse.js";
-import { getFilterStatement, getTimeStatement, processResults } from "../utils.js";
+import { getTimeStatement, processResults } from "../utils/utils.js";
 import { FilterParams } from "@rybbit/shared";
+import { getFilterStatement } from "../utils/getFilterStatement.js";
 
 interface GetPerformanceByDimensionRequest {
   Params: {
-    site: string;
+    siteId: string;
   };
   Querystring: FilterParams<{
     limit?: number;
     page?: number;
-    sortBy?: string;
-    sortOrder?: "asc" | "desc";
+    sort_by?: string;
+    sort_order?: "asc" | "desc";
     dimension: string;
   }>;
 }
@@ -54,19 +55,7 @@ type GetPerformanceByDimensionPaginatedResponse = {
 
 const getQuery = (request: FastifyRequest<GetPerformanceByDimensionRequest>, isCountQuery: boolean = false) => {
   const queryParams = request.query;
-  const {
-    startDate,
-    endDate,
-    timeZone,
-    filters,
-    limit,
-    page,
-    pastMinutesStart,
-    pastMinutesEnd,
-    sortBy,
-    sortOrder,
-    dimension,
-  } = queryParams;
+  const { filters, limit, page, sort_by: sortBy, sort_order: sortOrder, dimension } = queryParams;
 
   // Validate dimension
   const validDimensions = ["pathname", "country", "device_type", "browser", "operating_system", "region"];
@@ -75,8 +64,8 @@ const getQuery = (request: FastifyRequest<GetPerformanceByDimensionRequest>, isC
     throw new Error(`Invalid dimension: ${dimension}`);
   }
 
-  const filterStatement = getFilterStatement(filters);
   const timeStatement = getTimeStatement(request.query);
+  const filterStatement = getFilterStatement(filters, Number(request.params.siteId), timeStatement);
 
   let validatedLimit: number | null = null;
   if (!isCountQuery && limit !== undefined) {
@@ -222,7 +211,7 @@ export async function getPerformanceByDimension(
   res: FastifyReply
 ) {
   const { page, dimension } = req.query;
-  const site = req.params.site;
+  const site = req.params.siteId;
 
   const isPaginatedRequest = page !== undefined;
 

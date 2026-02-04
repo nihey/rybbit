@@ -10,6 +10,7 @@ import { Events } from "./components/sections/Events";
 import { Network } from "./components/sections/Network";
 import { Pages } from "./components/sections/Pages";
 import { Referrers } from "./components/sections/Referrers";
+import { SearchConsole } from "./components/sections/SearchConsole";
 import { Weekdays } from "./components/sections/Weekdays";
 
 export default function MainPage() {
@@ -26,17 +27,18 @@ function MainPageContent() {
   useSetPageTitle("Rybbit · Main");
 
   return (
-    <div className="p-2 md:p-4 max-w-[1100px] mx-auto space-y-3 ">
+    <div className="p-2 md:p-4 max-w-[1100px] mx-auto space-y-3">
       <SubHeader />
       <MainSection />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
         <Referrers />
         <Pages />
         <Devices />
         <Countries />
-        {IS_CLOUD && <Network />}
         <Events />
         <Weekdays />
+        {IS_CLOUD && <Network />}
+        {IS_CLOUD && <SearchConsole />}
       </div>
     </div>
   );

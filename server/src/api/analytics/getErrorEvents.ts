@@ -1,11 +1,12 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
-import { getFilterStatement, getTimeStatement, processResults } from "./utils.js";
+import { getTimeStatement, processResults } from "./utils/utils.js";
 import { FilterParams } from "@rybbit/shared";
+import { getFilterStatement } from "./utils/getFilterStatement.js";
 
 interface GetErrorEventsRequest {
   Params: {
-    site: string;
+    siteId: string;
   };
   Querystring: FilterParams<{
     errorMessage: string;
@@ -46,11 +47,10 @@ type ErrorEventsPaginatedResponse = {
 };
 
 const getErrorEventsQuery = (request: FastifyRequest<GetErrorEventsRequest>, isCountQuery: boolean = false) => {
-  const { startDate, endDate, timeZone, filters, errorMessage, limit, page, pastMinutesStart, pastMinutesEnd } =
-    request.query;
+  const { filters, limit, page } = request.query;
 
-  const filterStatement = getFilterStatement(filters);
   const timeStatement = getTimeStatement(request.query);
+  const filterStatement = getFilterStatement(filters, Number(request.params.siteId), timeStatement);
 
   let validatedLimit: number | null = null;
   if (!isCountQuery && limit !== undefined) {
@@ -132,7 +132,7 @@ const getErrorEventsQuery = (request: FastifyRequest<GetErrorEventsRequest>, isC
 };
 
 export async function getErrorEvents(req: FastifyRequest<GetErrorEventsRequest>, res: FastifyReply) {
-  const site = req.params.site;
+  const site = req.params.siteId;
   const { errorMessage, page } = req.query;
 
   if (!errorMessage) {

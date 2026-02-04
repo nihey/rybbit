@@ -2,13 +2,13 @@
 
 import { Minus, Plus } from "lucide-react";
 import React, { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { useGetExcludedIPs, useUpdateExcludedIPs } from "@/api/admin/excludedIPs";
+import { useGetExcludedIPs, useUpdateExcludedIPs } from "@/api/admin/hooks/useExcludedIPs";
 import { validateIPPattern } from "@/lib/ipValidation";
 
 interface IPExclusionManagerProps {
@@ -129,7 +129,7 @@ export function IPExclusionManager({ siteId, disabled = false }: IPExclusionMana
                 size="icon"
                 onClick={() => removeIPField(index)}
                 disabled={disabled}
-                className="flex-shrink-0"
+                className="shrink-0"
               >
                 <Minus className="h-4 w-4" />
               </Button>

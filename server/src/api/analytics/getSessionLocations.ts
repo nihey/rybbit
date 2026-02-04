@@ -1,21 +1,22 @@
 import { FilterParams } from "@rybbit/shared";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
-import { getFilterStatement, getTimeStatement, processResults } from "./utils.js";
+import { getTimeStatement, processResults } from "./utils/utils.js";
+import { getFilterStatement } from "./utils/getFilterStatement.js";
 
 export async function getSessionLocations(
   req: FastifyRequest<{
     Params: {
-      site: string;
+      siteId: string;
     };
     Querystring: FilterParams<{}>;
   }>,
   res: FastifyReply
 ) {
-  const { site } = req.params;
+  const { siteId } = req.params;
 
-  const filterStatement = getFilterStatement(req.query.filters);
   const timeStatement = getTimeStatement(req.query);
+  const filterStatement = getFilterStatement(req.query.filters, Number(siteId), timeStatement);
 
   const result = await clickhouse.query({
     query: `
@@ -49,7 +50,7 @@ GROUP BY
     city,
     country`,
     query_params: {
-      site,
+      site: siteId,
     },
     format: "JSONEachRow",
   });

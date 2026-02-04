@@ -3,25 +3,11 @@ import { z } from "zod";
 import { db } from "../../db/postgres/postgres.js";
 import { sites } from "../../db/postgres/schema.js";
 import { eq } from "drizzle-orm";
-import { getUserHasAdminAccessToSite } from "../../lib/auth-utils.js";
 import { siteConfig } from "../../lib/siteConfig.js";
 import { validateIPPattern } from "../../lib/ipUtils.js";
 
 // Schema for the update request - all fields are optional but validated when present
 const updateSiteConfigSchema = z.object({
-  siteId: z.union([z.string(), z.number()]).transform(val => {
-    const num = typeof val === "number" ? val : parseInt(val as string, 10);
-    if (isNaN(num) || num <= 0) {
-      throw new z.ZodError([
-        {
-          code: z.ZodIssueCode.custom,
-          message: "Invalid site ID: must be a positive integer",
-          path: ["siteId"],
-        },
-      ]);
-    }
-    return num;
-  }),
   // Site settings
   public: z.boolean().optional(),
   saltUserIds: z.boolean().optional(),
@@ -45,6 +31,9 @@ const updateSiteConfigSchema = z.object({
     .max(250)
     .optional(),
 
+  // Tags
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+
   // Analytics features
   sessionReplay: z.boolean().optional(),
   webVitals: z.boolean().optional(),
@@ -54,15 +43,27 @@ const updateSiteConfigSchema = z.object({
   trackInitialPageView: z.boolean().optional(),
   trackSpaNavigation: z.boolean().optional(),
   trackIp: z.boolean().optional(),
+  trackButtonClicks: z.boolean().optional(),
+  trackCopy: z.boolean().optional(),
+  trackFormInteractions: z.boolean().optional(),
 });
 
 type UpdateSiteConfigRequest = z.infer<typeof updateSiteConfigSchema>;
 
 export async function updateSiteConfig(
-  request: FastifyRequest<{ Body: UpdateSiteConfigRequest }>,
+  request: FastifyRequest<{ Params: { siteId: string }; Body: UpdateSiteConfigRequest }>,
   reply: FastifyReply
 ) {
   try {
+    // Get siteId from path params
+    const siteId = parseInt(request.params.siteId, 10);
+    if (isNaN(siteId) || siteId <= 0) {
+      return reply.status(400).send({
+        success: false,
+        error: "Invalid site ID: must be a positive integer",
+      });
+    }
+
     // Validate request body
     const validationResult = updateSiteConfigSchema.safeParse(request.body);
     if (!validationResult.success) {
@@ -73,13 +74,7 @@ export async function updateSiteConfig(
       });
     }
 
-    const { siteId, ...updateData } = validationResult.data;
-
-    // Check user permissions
-    const userHasAdminAccessToSite = await getUserHasAdminAccessToSite(request, String(siteId));
-    if (!userHasAdminAccessToSite) {
-      return reply.status(403).send({ error: "Forbidden" });
-    }
+    const updateData = validationResult.data;
 
     // Check if site exists
     const site = await db.query.sites.findFirst({
@@ -120,6 +115,7 @@ export async function updateSiteConfig(
       "domain",
       "excludedIPs",
       "excludedCountries",
+      "tags",
       "sessionReplay",
       "webVitals",
       "trackErrors",
@@ -128,6 +124,9 @@ export async function updateSiteConfig(
       "trackInitialPageView",
       "trackSpaNavigation",
       "trackIp",
+      "trackButtonClicks",
+      "trackCopy",
+      "trackFormInteractions",
     ];
 
     for (const field of directMappings) {

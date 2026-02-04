@@ -2,8 +2,9 @@
 
 import { Gauge } from "lucide-react";
 import { useParams } from "next/navigation";
-import { toast } from "sonner";
-import { updateSiteConfig, useGetSite } from "../../../../api/admin/sites";
+import { toast } from "@/components/ui/sonner";
+import { updateSiteConfig } from "../../../../api/admin/endpoints";
+import { useGetSite } from "../../../../api/admin/hooks/useSites";
 import { Alert, AlertDescription, AlertTitle } from "../../../../components/ui/alert";
 import { Button } from "../../../../components/ui/button";
 
@@ -17,7 +18,7 @@ export function EnableWebVitals() {
   return (
     <Alert className="p-4 bg-neutral-50/50 border-amber-200/50 dark:bg-neutral-800/25 dark:border-amber-600/80">
       <div className="flex items-start space-x-3">
-        <Gauge className="h-5 w-5 mt-0.5 text-neutral-100" />
+        <Gauge className="h-5 w-5 mt-0.5 text-amber-600 dark:text-neutral-100" />
         <div className="flex-1">
           <AlertTitle className="text-base font-semibold mb-1 text-neutral-700/90 dark:text-neutral-100">
             Web Vitals Collection is Disabled

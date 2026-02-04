@@ -2,12 +2,12 @@
 
 import { X } from "lucide-react";
 import React, { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-import { useGetExcludedCountries, useUpdateExcludedCountries } from "@/api/admin/excludedCountries";
+import { useGetExcludedCountries, useUpdateExcludedCountries } from "@/api/admin/hooks/useExcludedCountries";
 import { CountrySelector } from "./CountrySelector";
 
 interface CountryExclusionManagerProps {

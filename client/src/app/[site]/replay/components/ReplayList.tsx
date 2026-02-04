@@ -3,11 +3,9 @@ import { useIntersectionObserver } from "@uidotdev/usehooks";
 import { Loader2, Video } from "lucide-react";
 import { NothingFound } from "../../../../components/NothingFound";
 import { ReplayCard, ReplayCardSkeleton } from "./ReplayCard";
-import {
-  useGetSessionReplays,
-  SessionReplayListItem,
-} from "../../../../api/analytics/sessionReplay/useGetSessionReplays";
-import { useReplayStore } from "./replayStore";
+import { useGetSessionReplays } from "../../../../api/analytics/hooks/sessionReplay/useGetSessionReplays";
+import { SessionReplayListItem } from "../../../../api/analytics/endpoints";
+import { useReplayStore } from "@/components/replay/replayStore";
 import { ScrollArea } from "../../../../components/ui/scroll-area";
 import { Input } from "../../../../components/ui/input";
 
@@ -49,9 +47,9 @@ export function ReplayList() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 flex flex-col">
+      <div className="rounded-lg border border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col">
         <div className="flex items-center gap-2 p-2">
-          <div className="text-xs text-neutral-400">Min Duration</div>
+          <div className="text-xs text-neutral-600 dark:text-neutral-400">Min Duration</div>
           <div className="flex items-center gap-1">
             <Input
               type="number"
@@ -60,40 +58,42 @@ export function ReplayList() {
               onChange={e => setMinDuration(Number(e.target.value))}
               className="w-16"
             />
-            <div className="text-xs text-neutral-400">s</div>
+            <div className="text-xs text-neutral-600 dark:text-neutral-400">s</div>
           </div>
         </div>
       </div>
-      <div className="rounded-lg border border-neutral-800 flex flex-col">
-        <ScrollArea className="h-[calc(100vh-178px)]">
-          {isLoading ? (
-            Array.from({ length: 20 }).map((_, index) => <ReplayCardSkeleton key={`loading-${index}`} />)
-          ) : flattenedData.length === 0 ? (
-            <NothingFound
-              icon={<Video className="w-10 h-10" />}
-              title={"No session replays found"}
-              description={"Try a different date range or filter"}
-            />
-          ) : (
-            <>
-              {flattenedData.map((replay: SessionReplayListItem, index) => (
-                <ReplayCard key={`${replay.session_id}-${index}`} replay={replay} />
-              ))}
+      <div className="rounded-lg border border-neutral-100 dark:border-neutral-800 flex flex-col">
+        <ScrollArea className="h-[calc(100vh-130px)] rounded-lg">
+          <div className="overflow-x-hidden">
+            {isLoading ? (
+              Array.from({ length: 20 }).map((_, index) => <ReplayCardSkeleton key={`loading-${index}`} />)
+            ) : flattenedData.length === 0 ? (
+              <NothingFound
+                icon={<Video className="w-10 h-10" />}
+                title={"No session replays found"}
+                description={"Try a different date range or filter"}
+              />
+            ) : (
+              <>
+                {flattenedData.map((replay: SessionReplayListItem, index) => (
+                  <ReplayCard key={`${replay.session_id}-${index}`} replay={replay} />
+                ))}
 
-              {/* Infinite scroll anchor and loading indicator */}
-              <div ref={ref} className="py-3 flex justify-center">
-                {isFetchingNextPage && (
-                  <div className="flex items-center gap-2 text-neutral-400 text-xs">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading more replays...
-                  </div>
-                )}
-                {!hasNextPage && !isFetchingNextPage && flattenedData.length > 0 && (
-                  <div className="text-neutral-500 text-xs">All replays loaded</div>
-                )}
-              </div>
-            </>
-          )}
+                {/* Infinite scroll anchor and loading indicator */}
+                <div ref={ref} className="py-3 flex justify-center">
+                  {isFetchingNextPage && (
+                    <div className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400 text-xs">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading more replays...
+                    </div>
+                  )}
+                  {!hasNextPage && !isFetchingNextPage && flattenedData.length > 0 && (
+                    <div className="text-neutral-500 dark:text-neutral-500 text-xs">All replays loaded</div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </ScrollArea>
       </div>
     </div>

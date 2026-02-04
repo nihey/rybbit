@@ -16,11 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { SiteResponse, useGetSite } from "@/api/admin/sites";
-import { useUserOrganizations } from "../../api/admin/organizations";
-import { ApiKeyManager } from "./ApiKeyManager";
 import { ScriptBuilder } from "./ScriptBuilder";
 import { SiteConfiguration } from "./SiteConfiguration";
+import { ImportManager } from "./ImportManager";
+import { useGetSite } from "../../api/admin/hooks/useSites";
+import { useUserOrganizations } from "../../api/admin/hooks/useOrganizations";
+import { SiteResponse } from "../../api/admin/endpoints";
 
 export function SiteSettings({ siteId, trigger }: { siteId: number; trigger?: React.ReactNode }) {
   const { data: siteMetadata, isLoading, error } = useGetSite(siteId);
@@ -61,15 +62,15 @@ function SiteSettingsInner({ siteMetadata, trigger }: { siteMetadata: SiteRespon
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="settings">Site Settings</TabsTrigger>
             <TabsTrigger value="script">Tracking Script</TabsTrigger>
-            <TabsTrigger value="apikey">API Key</TabsTrigger>
+            <TabsTrigger value="import">Import</TabsTrigger>
           </TabsList>
 
           <TabsContent value="script" className="pt-4 space-y-4 max-h-[70vh] overflow-y-auto">
             <ScriptBuilder siteId={siteMetadata.id ?? String(siteMetadata.siteId)} />
           </TabsContent>
 
-          <TabsContent value="apikey" className="pt-4 space-y-4 max-h-[70vh] overflow-y-auto">
-            <ApiKeyManager siteId={siteMetadata.siteId} disabled={disabled} />
+          <TabsContent value="import" className="pt-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <ImportManager siteId={siteMetadata.siteId} disabled={disabled} />
           </TabsContent>
 
           <TabsContent value="settings">

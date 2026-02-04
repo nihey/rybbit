@@ -1,11 +1,12 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
-import { getFilterStatement, getTimeStatement, processResults } from "./utils.js";
+import { getTimeStatement, processResults } from "./utils/utils.js";
 import { FilterParams } from "@rybbit/shared";
+import { getFilterStatement } from "./utils/getFilterStatement.js";
 
 interface GetPageTitlesRequest {
   Params: {
-    site: string;
+    siteId: string;
   };
   Querystring: FilterParams<{
     limit?: number;
@@ -29,10 +30,10 @@ type PageTitlesPaginatedResponse = {
 };
 
 const getPageTitlesQuery = (request: FastifyRequest<GetPageTitlesRequest>, isCountQuery: boolean = false) => {
-  const { startDate, endDate, timeZone, filters, limit, page, pastMinutesStart, pastMinutesEnd } = request.query;
+  const { filters, limit, page } = request.query;
 
-  const filterStatement = getFilterStatement(filters);
   const timeStatement = getTimeStatement(request.query);
+  const filterStatement = getFilterStatement(filters, Number(request.params.siteId), timeStatement);
 
   let validatedLimit: number | null = null;
   if (!isCountQuery && limit !== undefined) {
@@ -121,7 +122,7 @@ const getPageTitlesQuery = (request: FastifyRequest<GetPageTitlesRequest>, isCou
 };
 
 export async function getPageTitles(req: FastifyRequest<GetPageTitlesRequest>, res: FastifyReply) {
-  const site = req.params.site;
+  const site = req.params.siteId;
   const { page } = req.query;
 
   const isPaginatedRequest = page !== undefined; // True if page is present

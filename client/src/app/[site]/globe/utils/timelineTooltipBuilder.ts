@@ -1,11 +1,12 @@
 import { DateTime } from "luxon";
 import { createElement } from "react";
+import { getTimezone } from "../../../../lib/store";
 // @ts-ignore - React 19 has built-in types
 import { renderToStaticMarkup } from "react-dom/server";
 import { Eye, MousePointerClick } from "lucide-react";
 import { generateName } from "../../../../components/Avatar";
 import { formatShortDuration, hour12, userLocale } from "../../../../lib/dateTimeUtils";
-import type { GetSessionsResponse } from "../../../../api/analytics/userSessions";
+import type { GetSessionsResponse } from "../../../../api/analytics/endpoints";
 import { extractDomain, getDisplayName } from "../../../../components/Channel";
 import {
   generateAvatarSVG,
@@ -33,7 +34,7 @@ export function buildTooltipHTML(session: GetSessionsResponse[number], lng: numb
   // Start time formatting
   const startTime = DateTime.fromSQL(session.session_start, { zone: "utc" })
     .setLocale(userLocale)
-    .toLocal()
+    .setZone(getTimezone())
     .toFormat(hour12 ? "MMM d, h:mm a" : "dd MMM, HH:mm");
 
   // Pageview and event icons
@@ -62,7 +63,7 @@ export function buildTooltipHTML(session: GetSessionsResponse[number], lng: numb
   return `
     <div class="flex flex-col gap-3 p-3 bg-neutral-850 border border-neutral-750 rounded-lg">
       <div class="flex items-start gap-2.5">
-        <div class="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden">
+        <div class="shrink-0 w-9 h-9 rounded-full overflow-hidden">
           ${avatarSVG}
         </div>
         <div class="flex-1 min-w-0">
