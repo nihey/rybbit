@@ -1,5 +1,6 @@
 import { CopyText } from "@/components/CopyText";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
+import { useExtracted } from "next-intl";
 import { GetSessionsResponse } from "../../../api/analytics/endpoints";
 import { Browser } from "../../../app/[site]/components/shared/icons/Browser";
 import { CountryFlag } from "../../../app/[site]/components/shared/icons/CountryFlag";
@@ -8,6 +9,7 @@ import { useGetRegionName } from "../../../lib/geo";
 import { getCountryName, getLanguageName } from "../../../lib/utils";
 import { Avatar, generateName } from "../../Avatar";
 import { IdentifiedBadge } from "../../IdentifiedBadge";
+import { DeviceIcon } from "../../../app/[site]/components/shared/icons/Device";
 
 interface SessionInfoTabProps {
   session: GetSessionsResponse[number];
@@ -36,6 +38,7 @@ export function SessionInfoTab({
   sessionDetails,
 }: SessionInfoTabProps) {
   const { getRegionName } = useGetRegionName();
+  const t = useExtracted();
   const isIdentified = !!session.identified_user_id;
 
   return (
@@ -43,7 +46,7 @@ export function SessionInfoTab({
       {/* User Information */}
       <div>
         <h4 className="text-sm font-medium mb-3 text-neutral-600 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-800 pb-2">
-          User Information
+          {t("User Information")}
         </h4>
         <div className="space-y-3">
           {sessionDetails?.user_id && (
@@ -63,8 +66,8 @@ export function SessionInfoTab({
                   <span className="font-medium text-neutral-600 dark:text-neutral-300">
                     {isIdentified
                       ? (session.traits?.username as string) ||
-                        (session.traits?.name as string) ||
-                        session.identified_user_id
+                      (session.traits?.name as string) ||
+                      session.identified_user_id
                       : generateName(sessionDetails.user_id)}
                   </span>
                   {isIdentified && (
@@ -73,7 +76,7 @@ export function SessionInfoTab({
                 </div>
                 <div className="text-sm text-neutral-500 dark:text-neutral-400 flex items-center">
                   <span className="font-medium text-neutral-600 dark:text-neutral-300">
-                    User ID:
+                    {t("User ID:")}
                   </span>
                   <CopyText
                     text={
@@ -93,12 +96,12 @@ export function SessionInfoTab({
             {sessionDetails?.language && (
               <div className="text-sm flex items-center gap-2">
                 <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                  Language:
+                  {t("Language:")}
                 </span>
                 <span className="text-neutral-500 dark:text-neutral-400">
                   {sessionDetails.language
                     ? getLanguageName(sessionDetails.language)
-                    : "N/A"}
+                    : t("N/A")}
                 </span>
               </div>
             )}
@@ -106,7 +109,7 @@ export function SessionInfoTab({
             {sessionDetails?.country && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                  Country:
+                  {t("Country:")}
                 </span>
                 <div className="flex items-center gap-1 text-neutral-500 dark:text-neutral-400">
                   <CountryFlag country={sessionDetails.country} />
@@ -121,7 +124,7 @@ export function SessionInfoTab({
               getRegionName(sessionDetails.region) && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                    Region:
+                    {t("Region:")}
                   </span>
                   <span className="text-neutral-500 dark:text-neutral-400">
                     {getRegionName(sessionDetails.region)}
@@ -131,7 +134,7 @@ export function SessionInfoTab({
             {sessionDetails?.city && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                  City:
+                  {t("City:")}
                 </span>
                 <span className="text-neutral-500 dark:text-neutral-400">
                   {sessionDetails.city}
@@ -145,37 +148,29 @@ export function SessionInfoTab({
       {/* Device Information */}
       <div>
         <h4 className="text-sm font-medium mb-3 text-neutral-600 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-800 pb-2">
-          Device Information
+          {t("Device Information")}
         </h4>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              Device:
+              {t("Device:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-              {sessionDetails?.device_type === "Desktop" && (
-                <Monitor className="w-4 h-4" />
-              )}
-              {sessionDetails?.device_type === "Mobile" && (
-                <Smartphone className="w-4 h-4" />
-              )}
-              {sessionDetails?.device_type === "Tablet" && (
-                <Tablet className="w-4 h-4" />
-              )}
-              <span>{sessionDetails?.device_type || "Unknown"}</span>
+              <DeviceIcon deviceType={sessionDetails?.device_type || ""} />
+              <span>{sessionDetails?.device_type || t("Unknown")}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              Browser:
+              {t("Browser:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
               <Browser
                 browser={sessionDetails?.browser || "Unknown"}
               />
               <span>
-                {sessionDetails?.browser || "Unknown"}
+                {sessionDetails?.browser || t("Unknown")}
                 {sessionDetails?.browser_version && (
                   <span className="ml-1">
                     v{sessionDetails.browser_version}
@@ -187,14 +182,14 @@ export function SessionInfoTab({
 
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              OS:
+              {t("OS:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
               <OperatingSystem
                 os={sessionDetails?.operating_system || ""}
               />
               <span>
-                {sessionDetails?.operating_system || "Unknown"}
+                {sessionDetails?.operating_system || t("Unknown")}
                 {sessionDetails?.operating_system_version && (
                   <span className="ml-1">
                     {sessionDetails.operating_system_version}
@@ -205,10 +200,10 @@ export function SessionInfoTab({
           </div>
 
           {sessionDetails?.screen_width &&
-          sessionDetails?.screen_height ? (
+            sessionDetails?.screen_height ? (
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                Screen:
+                {t("Screen:")}
               </span>
               <span className="text-neutral-500 dark:text-neutral-400">
                 {sessionDetails.screen_width} ×{" "}
@@ -219,7 +214,7 @@ export function SessionInfoTab({
           {sessionDetails?.ip && (
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-                IP:
+                {t("IP:")}
               </span>
               <span className="text-neutral-500 dark:text-neutral-400">
                 {sessionDetails.ip}
@@ -232,33 +227,33 @@ export function SessionInfoTab({
       {/* Source Information */}
       <div>
         <h4 className="text-sm font-medium mb-3 text-neutral-600 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-800 pb-2">
-          Source Information
+          {t("Source Information")}
         </h4>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              Channel:
+              {t("Channel:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-              <span>{sessionDetails?.channel || "None"}</span>
+              <span>{sessionDetails?.channel || t("None")}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              Referrer:
+              {t("Referrer:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-              <span>{sessionDetails?.referrer || "None"}</span>
+              <span>{sessionDetails?.referrer || t("None")}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium text-neutral-600 dark:text-neutral-300 min-w-[80px]">
-              Entry Page:
+              {t("Entry Page:")}
             </span>
             <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-              <span>{sessionDetails?.entry_page || "None"}</span>
+              <span>{sessionDetails?.entry_page || t("None")}</span>
             </div>
           </div>
         </div>

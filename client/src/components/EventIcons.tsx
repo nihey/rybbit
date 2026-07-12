@@ -9,6 +9,7 @@ import {
   TriangleAlert,
   SquareMousePointer
 } from "lucide-react";
+import { useExtracted } from "next-intl";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "../lib/utils";
 import { EVENT_TYPE_CONFIG, EventType } from "../lib/events";
@@ -30,20 +31,34 @@ const EVENT_TYPE_COLORS: Record<string, string> = Object.fromEntries(
   EVENT_TYPE_CONFIG.map((config) => [config.value, config.colorClass])
 );
 
-const EVENT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  EVENT_TYPE_CONFIG.map((config) => [config.value, config.label])
-);
 
 interface EventTypeIconProps {
   type: EventType | string;
   className?: string;
+  // Disable when the icon sits next to its own label (e.g. select options)
+  tooltip?: boolean;
 }
 
-export function EventTypeIcon({ type, className }: EventTypeIconProps) {
+export function EventTypeIcon({ type, className, tooltip = true }: EventTypeIconProps) {
+  const t = useExtracted();
   const Icon = EVENT_TYPE_ICONS[type as EventType] || MousePointerClick;
   const colorClass = EVENT_TYPE_COLORS[type] || "text-amber-400";
 
-  const label = EVENT_TYPE_LABELS[type] || type;
+  if (!tooltip) {
+    return <Icon className={cn("h-4 w-4", className, colorClass)} />;
+  }
+
+  const translatedLabels: Record<string, string> = {
+    pageview: t("Pageview"),
+    custom_event: t("Event"),
+    outbound: t("Outbound"),
+    button_click: t("Button Click"),
+    copy: t("Copy"),
+    form_submit: t("Form Submit"),
+    input_change: t("Input Change"),
+    error: t("Error"),
+  };
+  const label = translatedLabels[type] || type;
 
   return (
     <Tooltip>

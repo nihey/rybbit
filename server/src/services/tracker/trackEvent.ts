@@ -1,5 +1,4 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { isbot } from "isbot";
 import { z, ZodError } from "zod";
 import { createServiceLogger } from "../../lib/logger/logger.js";
 import { siteConfig } from "../../lib/siteConfig.js";
@@ -8,6 +7,10 @@ import { usageService } from "../usageService.js";
 import { pageviewQueue } from "./pageviewQueue.js";
 import { createBasePayload } from "./utils.js";
 import { getLocation } from "../../db/geolocation/geolocation.js";
+import { checkApiKey } from "../../lib/auth-utils.js";
+import { botEventQueue } from "./botBlocking/botEventQueue.js";
+import { checkBotBlocking } from "./botBlocking/index.js";
+import { resolveTrackingIdentity } from "./requestIdentity.js";
 
 // Shared fields for all event types
 const baseEventFields = {
@@ -15,14 +18,19 @@ const baseEventFields = {
   hostname: z.string().max(253).optional(),
   pathname: z.string().max(2048).optional(),
   querystring: z.string().max(2048).optional(),
-  screenWidth: z.number().int().positive().optional(),
-  screenHeight: z.number().int().positive().optional(),
+  screenWidth: z.number().int().nonnegative().optional(),
+  screenHeight: z.number().int().nonnegative().optional(),
   language: z.string().max(35).optional(),
   page_title: z.string().max(512).optional(),
   referrer: z.string().max(2048).optional(),
+  anonymous_id: z.string().min(1).max(255).optional(),
   user_id: z.string().max(255).optional(),
+  tag: z.string().max(256).optional(),
+  feature_flags: z.record(z.string().max(100), z.string().max(2048)).optional(),
   ip_address: z.string().ip().optional(),
   user_agent: z.string().max(512).optional(),
+  _bs: z.number().int().min(0).max(10).optional(),
+  _bsm: z.number().int().min(0).max(1023).optional(),
 };
 
 // Default event_name and properties used by pageview and performance
@@ -166,15 +174,18 @@ export const trackingPayloadSchema = z.discriminatedUnion("type", [
           val => {
             try {
               const parsed = JSON.parse(val);
-              if (typeof parsed.textLength !== "number" || parsed.textLength < 0) return false;
               if (typeof parsed.sourceElement !== "string") return false;
+              if (parsed.text !== undefined && typeof parsed.text !== "string") return false;
+              if (parsed.textLength !== undefined && (typeof parsed.textLength !== "number" || parsed.textLength < 0))
+                return false;
               return true;
             } catch {
               return false;
             }
           },
           {
-            message: "Properties must be valid JSON with copy fields (textLength>=0, sourceElement required)",
+            message:
+              "Properties must be valid JSON with copy fields (sourceElement required, text and textLength optional)",
           }
         ),
     })
@@ -202,7 +213,8 @@ export const trackingPayloadSchema = z.discriminatedUnion("type", [
             }
           },
           {
-            message: "Properties must be valid JSON with form_submit fields (formId, formName, formAction, method, fieldCount required)",
+            message:
+              "Properties must be valid JSON with form_submit fields (formId, formName, formAction, method, fieldCount required)",
           }
         ),
     })
@@ -236,6 +248,16 @@ export const trackingPayloadSchema = z.discriminatedUnion("type", [
 
 const logger = createServiceLogger("track-event");
 
+async function isTrustedServerSideIngestion(request: FastifyRequest, siteId: number): Promise<boolean> {
+  const authHeader = request.headers["authorization"];
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const apiKeyResult = await checkApiKey(request, { siteId });
+  return apiKeyResult.valid;
+}
+
 // Unified handler for all events (pageviews and custom events)
 export async function trackEvent(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -256,43 +278,47 @@ export async function trackEvent(request: FastifyRequest, reply: FastifyReply) {
     // Get the site configuration to get the numeric siteId
     const siteConfiguration = await siteConfig.getConfig(validatedPayload.site_id);
     if (!siteConfiguration) {
-      // logger.warn({ siteId: validatedPayload.site_id }, "Site not found");
+      logger.warn({ siteId: validatedPayload.site_id }, "Site not found");
       return reply.status(404).send({
         success: false,
         error: "Site not found",
       });
     }
 
-    // Check if bot blocking is enabled for this site and if the request is from a bot
-    // Skip bot check for Bearer token authenticated requests
-    const authHeader = request.headers["authorization"];
-    const hasBearerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ");
-    if (!hasBearerToken && siteConfiguration.blockBots) {
-      // Use custom user agent if provided, otherwise fall back to header
-      const userAgent = validatedPayload.user_agent || (request.headers["user-agent"] as string);
-      if (userAgent && isbot(userAgent)) {
-        // logger.info({ siteId: validatedPayload.site_id, userAgent }, "Bot request filtered");
-        return reply.status(200).send({
-          success: true,
-          message: "Event not tracked - bot detected",
-        });
-      }
-    }
+    const trustedServerSideIngestion = await isTrustedServerSideIngestion(request, siteConfiguration.siteId);
+    const trackingIdentity = resolveTrackingIdentity(request, validatedPayload, trustedServerSideIngestion);
+    const requestIP = trackingIdentity.ipAddress;
+
+    const botDetectionResult = await checkBotBlocking({
+      request,
+      blockBots: siteConfiguration.blockBots,
+      trustedServerSideIngestion,
+      isMobileSite: siteConfiguration.type === "mobile",
+      payload: {
+        siteId: validatedPayload.site_id,
+        userAgent: trackingIdentity.userAgent,
+        clientBotScore: validatedPayload._bs,
+        clientBotSignalMask: validatedPayload._bsm,
+        screenWidth: validatedPayload.screenWidth,
+        screenHeight: validatedPayload.screenHeight,
+        hostname: validatedPayload.hostname,
+        pathname: validatedPayload.pathname,
+        eventType: validatedPayload.type,
+        ipAddress: requestIP,
+      },
+    });
 
     // Check if the site has exceeded its monthly limit (using numeric siteId)
     if (usageService.isSiteOverLimit(siteConfiguration.siteId)) {
-      // logger.info({ siteId: validatedPayload.site_id }, "Skipping event - site over monthly limit");
+      logger.info({ siteId: validatedPayload.site_id }, "Skipping event - site over monthly limit");
       return reply.status(200).send("Site over monthly limit, event not tracked");
     }
 
     // Check if the IP should be excluded from tracking
-    // Use custom IP if provided in payload, otherwise get from request
-    const requestIP = validatedPayload.ip_address || request.ip || "";
-
     if (siteConfiguration.excludedIPs && siteConfiguration.excludedIPs.length > 0) {
       const isExcluded = await siteConfig.isIPExcluded(requestIP, validatedPayload.site_id);
       if (isExcluded) {
-        // logger.info({ siteId: validatedPayload.site_id, ip: requestIP }, "IP excluded from tracking");
+        logger.info({ siteId: validatedPayload.site_id, ip: requestIP }, "IP excluded from tracking");
         return reply.status(200).send({
           success: true,
           message: "Event not tracked - IP excluded",
@@ -320,13 +346,74 @@ export async function trackEvent(request: FastifyRequest, reply: FastifyReply) {
       }
     }
 
+    // Check if the pathname should be excluded from tracking
+    if (siteConfiguration.excludedPaths && siteConfiguration.excludedPaths.length > 0) {
+      const isPathExcluded = await siteConfig.isPathExcluded(validatedPayload.pathname, validatedPayload.site_id);
+      if (isPathExcluded) {
+        logger.info(
+          { siteId: validatedPayload.site_id, pathname: validatedPayload.pathname },
+          "Path excluded from tracking"
+        );
+        return reply.status(200).send({
+          success: true,
+          message: "Event not tracked - path excluded",
+        });
+      }
+    }
+
+    // Check if the hostname should be excluded from tracking
+    if (siteConfiguration.excludedHostnames && siteConfiguration.excludedHostnames.length > 0) {
+      const isHostnameExcluded = await siteConfig.isHostnameExcluded(
+        validatedPayload.hostname,
+        validatedPayload.site_id
+      );
+      if (isHostnameExcluded) {
+        logger.info(
+          { siteId: validatedPayload.site_id, hostname: validatedPayload.hostname },
+          "Hostname excluded from tracking"
+        );
+        return reply.status(200).send({
+          success: true,
+          message: "Event not tracked - hostname excluded",
+        });
+      }
+    }
+
+    // Check if the user agent should be excluded from tracking
+    if (siteConfiguration.excludedUserAgents && siteConfiguration.excludedUserAgents.length > 0) {
+      const isUserAgentExcluded = await siteConfig.isUserAgentExcluded(
+        trackingIdentity.userAgent,
+        validatedPayload.site_id
+      );
+      if (isUserAgentExcluded) {
+        logger.info({ siteId: validatedPayload.site_id }, "User agent excluded from tracking");
+        return reply.status(200).send({
+          success: true,
+          message: "Event not tracked - user agent excluded",
+        });
+      }
+    }
+
     // Create base payload for the event using validated data
     const payload = await createBasePayload(
       request, // Pass request for IP/UA
       validatedPayload.type,
       validatedPayload, // Pass original validated payload
-      siteConfiguration
+      siteConfiguration,
+      trustedServerSideIngestion
     );
+
+    if (botDetectionResult) {
+      await botEventQueue.add({
+        ...payload,
+        ...botDetectionResult.eventProperties,
+        sessionId: `bot:${payload.userId}`,
+      });
+
+      return reply.status(200).send({
+        success: true,
+      });
+    }
 
     // Update session (use numeric siteId)
     const { sessionId } = await sessionsService.updateSession({

@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { eq } from "drizzle-orm";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { db } from "../../db/postgres/postgres.js";
 import { sites } from "../../db/postgres/schema.js";
@@ -13,6 +14,7 @@ export async function addSite(
     Body: {
       domain: string;
       name: string;
+      type?: "web" | "mobile" | null;
       public?: boolean;
       saltUserIds?: boolean;
       blockBots?: boolean;
@@ -38,6 +40,7 @@ export async function addSite(
   const {
     domain,
     name,
+    type,
     public: isPublic,
     saltUserIds,
     blockBots,
@@ -57,14 +60,27 @@ export async function addSite(
     tags,
   } = request.body;
 
+  const siteType = type === "mobile" ? "mobile" : "web";
+
   // Strip protocol and trailing slash before validation
   const cleanedDomain = domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 
-  // Validate domain format using regex
+  // Validate domain/app identifier format using regex
   const domainRegex = /^(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+\p{L}{2,}$/u;
-  if (!domainRegex.test(cleanedDomain)) {
+  const appIdentifierRegex = /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/;
+  if (siteType === "web" && !domainRegex.test(cleanedDomain)) {
     return reply.status(400).send({
       error: "Invalid domain format. Must be a valid domain like example.com or sub.example.com",
+    });
+  }
+  if (siteType === "mobile" && !appIdentifierRegex.test(cleanedDomain)) {
+    return reply.status(400).send({
+      error: "Invalid app identifier. Use a bundle/package identifier like com.example.app",
+    });
+  }
+  if (siteType === "mobile" && (sessionReplay || webVitals)) {
+    return reply.status(400).send({
+      error: "Session replay and Web Vitals are only available for web sites",
     });
   }
 
@@ -74,7 +90,7 @@ export async function addSite(
     if (IS_CLOUD) {
       const subscription = await getSubscriptionInner(organizationId);
 
-      if (sessionReplay && !subscription?.isPro) {
+      if (sessionReplay && !subscription?.planName.includes("pro")) {
         return reply.status(403).send({
           error: "Session replay requires a Pro subscription",
         });
@@ -87,6 +103,20 @@ export async function addSite(
           error: `The following features require an active subscription: ${requestedStandard.map(([k]) => k).join(", ")}`,
         });
       }
+
+      // Enforce site limit
+      const siteLimit = subscription?.siteLimit ?? null;
+      if (siteLimit !== null) {
+        const existingSites = await db
+          .select({ siteId: sites.siteId })
+          .from(sites)
+          .where(eq(sites.organizationId, organizationId));
+        if (existingSites.length >= siteLimit) {
+          return reply.status(403).send({
+            error: `You have reached the limit of ${siteLimit} website${siteLimit === 1 ? "" : "s"} for your plan. Please upgrade to add more.`,
+          });
+        }
+      }
     }
 
     const id = randomBytes(6).toString("hex");
@@ -96,6 +126,7 @@ export async function addSite(
       .insert(sites)
       .values({
         id,
+        type: siteType === "web" ? null : siteType,
         domain: cleanedDomain,
         name,
         createdBy: userId,
@@ -105,8 +136,8 @@ export async function addSite(
         blockBots: blockBots === undefined ? true : blockBots,
         ...(excludedIPs !== undefined && { excludedIPs }),
         ...(excludedCountries !== undefined && { excludedCountries }),
-        ...(sessionReplay !== undefined && { sessionReplay }),
-        ...(webVitals !== undefined && { webVitals }),
+        ...(sessionReplay !== undefined && { sessionReplay: siteType === "mobile" ? false : sessionReplay }),
+        ...(webVitals !== undefined && { webVitals: siteType === "mobile" ? false : webVitals }),
         ...(trackErrors !== undefined && { trackErrors }),
         ...(trackOutbound !== undefined && { trackOutbound }),
         ...(trackUrlParams !== undefined && { trackUrlParams }),

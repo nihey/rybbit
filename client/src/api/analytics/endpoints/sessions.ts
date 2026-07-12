@@ -66,7 +66,9 @@ export interface SessionDetails {
   channel: string;
   session_end: string;
   session_start: string;
+  session_duration: number;
   pageviews: number;
+  events: number;
   entry_page: string;
   exit_page: string;
   ip: string;
@@ -116,6 +118,7 @@ export type LiveSessionLocation = {
 
 export interface SessionsParams extends CommonApiParams, PaginationParams {
   userId?: string;
+  sessionId?: string;
   identifiedOnly?: boolean;
   minPageviews?: number;
   minEvents?: number;
@@ -142,6 +145,7 @@ export async function fetchSessions(
     page: params.page,
     limit: params.limit,
     user_id: params.userId,
+    session_id: params.sessionId,
     identified_only: params.identifiedOnly,
     min_pageviews: params.minPageviews,
     min_events: params.minEvents,
@@ -181,14 +185,14 @@ export async function fetchSession(
 
 /**
  * Fetch session locations for map visualization
- * GET /api/session-locations/:site
+ * GET /api/sites/:site/sessions/locations
  */
 export async function fetchSessionLocations(
   site: string | number,
   params: CommonApiParams
 ): Promise<LiveSessionLocation[]> {
   const response = await authedFetch<{ data: LiveSessionLocation[] }>(
-    `/sites/${site}/session-locations`,
+    `/sites/${site}/sessions/locations`,
     toQueryParams(params)
   );
   return response.data;

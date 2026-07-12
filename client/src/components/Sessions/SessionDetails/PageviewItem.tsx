@@ -5,9 +5,11 @@ import { Clock } from "lucide-react";
 import { DateTime } from "luxon";
 import Link from "next/link";
 
+import { useExtracted } from "next-intl";
 import { SessionEvent } from "../../../api/analytics/endpoints";
-import { getEventDisplayName, PROPS_TO_HIDE } from "../../../lib/events";
-import { formatDuration, hour12 } from "../../../lib/dateTimeUtils";
+import { PROPS_TO_HIDE, useEventDisplayName } from "../../../lib/events";
+import { useDateTimeFormat } from "../../../hooks/useDateTimeFormat";
+import { formatDuration } from "../../../lib/dateTimeUtils";
 import { cn } from "../../../lib/utils";
 import { EventTypeIcon } from "../../EventIcons";
 
@@ -53,7 +55,8 @@ function renderDetails(
     isFormSubmit: boolean;
     isInputChange: boolean;
     duration: string | null;
-  }
+  },
+  t: (key: string) => string
 ) {
   const {
     isPageview,
@@ -113,7 +116,7 @@ function renderDetails(
           {item.props.stack && (
             <div>
               <p className="mt-2 mb-1 text-neutral-600 dark:text-neutral-300 font-light">
-                Stack Trace:
+                {t("Stack Trace:")}
               </p>
               <pre className="text-xs text-neutral-900 dark:text-neutral-100 bg-neutral-200 dark:bg-neutral-800 p-2 rounded overflow-x-auto whitespace-pre-wrap wrap-break-word">
                 {item.props.stack}
@@ -129,8 +132,8 @@ function renderDetails(
     const propsToHide = PROPS_TO_HIDE[item.type] || [];
     const remainingProps = item.props
       ? Object.entries(item.props).filter(
-          ([key]) => !propsToHide.includes(key)
-        )
+        ([key]) => !propsToHide.includes(key)
+      )
       : [];
 
     if (remainingProps.length === 0) return null;
@@ -155,6 +158,7 @@ interface PageviewItemProps {
   isLast?: boolean;
   nextTimestamp?: string;
   showHostname?: boolean;
+  highlightedEventTimestamp?: number;
 }
 
 export function PageviewItem({
@@ -163,7 +167,11 @@ export function PageviewItem({
   isLast = false,
   nextTimestamp,
   showHostname = true,
+  highlightedEventTimestamp,
 }: PageviewItemProps) {
+  const t = useExtracted();
+  const getEventDisplayName = useEventDisplayName();
+  const { hour12 } = useDateTimeFormat();
   const isPageview = item.type === "pageview";
   const isOutbound = item.type === "outbound";
   const isEvent = item.type === "custom_event";
@@ -176,6 +184,7 @@ export function PageviewItem({
     getTimezone()
   );
   const formattedTime = timestamp.toFormat(hour12 ? "h:mm:ss a" : "HH:mm:ss");
+  const isHighlightedEvent = highlightedEventTimestamp === DateTime.fromSQL(item.timestamp, { zone: "utc" }).toMillis();
 
   // Calculate duration if this is a pageview and we have the next timestamp
   let duration = null;
@@ -203,7 +212,8 @@ export function PageviewItem({
         <div
           className={cn(
             "flex items-center justify-center w-8 h-8 rounded-full border",
-            "bg-neutral-50 border-neutral-200 dark:bg-neutral-600/10 dark:border-neutral-600/25"
+            "bg-neutral-50 border-neutral-200 dark:bg-neutral-600/10 dark:border-neutral-600/25",
+            isHighlightedEvent && "bg-accent-400 border-accent-300 dark:bg-accent-600 dark:border-accent-500"
           )}
         >
           <span className="text-sm font-medium">{index + 1}</span>
@@ -274,7 +284,7 @@ export function PageviewItem({
           isFormSubmit,
           isInputChange,
           duration,
-        })}
+        }, t)}
       </div>
     </div>
   );

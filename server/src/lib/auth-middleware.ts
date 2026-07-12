@@ -12,10 +12,22 @@ import { resolveNumericSiteId } from "../utils.js";
 import { db } from "../db/postgres/postgres.js";
 
 type AuthMiddleware = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+type ApiKeyResult = Awaited<ReturnType<typeof checkApiKey>>;
 
 const getSiteIdFromParams = (request: FastifyRequest): string | undefined => {
-  const params = request.params as Record<string, string>;
-  return params.siteId;
+  const params = request.params as Record<string, string> | undefined;
+  return params?.siteId;
+};
+
+const getOrganizationIdFromParams = (request: FastifyRequest): string | undefined => {
+  const params = request.params as Record<string, string> | undefined;
+  return params?.organizationId;
+};
+
+const attachApiKeyUser = (request: FastifyRequest, apiKeyResult: ApiKeyResult) => {
+  if (apiKeyResult.userId) {
+    request.user = { id: apiKeyResult.userId };
+  }
 };
 
 /**
@@ -36,7 +48,7 @@ export const resolveSiteId: AuthMiddleware = async (request, reply) => {
 };
 
 /**
- * Requires valid session or API key. Attaches user to request if session available.
+ * Requires valid session or scoped API key. Attaches the authenticated user id to the request.
  */
 export const requireAuth: AuthMiddleware = async (request, reply) => {
   const session = await getSessionFromReq(request);
@@ -45,10 +57,17 @@ export const requireAuth: AuthMiddleware = async (request, reply) => {
     return;
   }
 
-  // API key provides access but doesn't populate request.user
-  const apiKeyResult = await checkApiKey(request, {});
+  // API keys are validated in the relevant site/org scope when one is present.
+  const organizationId = getOrganizationIdFromParams(request);
+  const siteId = getSiteIdFromParams(request);
+  const apiKeyResult = await checkApiKey(request, { organizationId, siteId });
   if (apiKeyResult.valid) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
+  }
+
+  if (apiKeyResult.rateLimited) {
+    return reply.status(429).send({ error: "Rate limit exceeded" });
   }
 
   return reply.status(401).send({ error: "Unauthorized" });
@@ -75,20 +94,26 @@ export const requireSiteAccess: AuthMiddleware = async (request, reply) => {
     return reply.status(400).send({ error: "Site ID required" });
   }
 
-  // Check API key first (doesn't populate request.user)
+  // Check API key first.
   const apiKeyResult = await checkApiKey(request, { siteId });
   if (apiKeyResult.valid) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
   }
 
   // Check session-based access
   const hasAccess = await getUserHasAccessToSite(request, siteId);
-  if (!hasAccess) {
-    return reply.status(403).send({ error: "Forbidden" });
+  if (hasAccess) {
+    const session = await getSessionFromReq(request);
+    if (session?.user) request.user = session.user;
+    return;
   }
 
-  const session = await getSessionFromReq(request);
-  if (session?.user) request.user = session.user;
+  if (apiKeyResult.rateLimited) {
+    return reply.status(429).send({ error: "Rate limit exceeded" });
+  }
+
+  return reply.status(403).send({ error: "Forbidden" });
 };
 
 /**
@@ -100,20 +125,26 @@ export const requireSiteAdminAccess: AuthMiddleware = async (request, reply) => 
     return reply.status(400).send({ error: "Site ID required" });
   }
 
-  // Check API key with admin/owner role first (doesn't populate request.user)
+  // Check API key with admin/owner role first.
   const apiKeyResult = await checkApiKey(request, { siteId });
   if (apiKeyResult.valid && (apiKeyResult.role === "admin" || apiKeyResult.role === "owner")) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
   }
 
   // Check session-based admin access
   const hasAdminAccess = await getUserHasAdminAccessToSite(request, siteId);
-  if (!hasAdminAccess) {
-    return reply.status(403).send({ error: "Forbidden" });
+  if (hasAdminAccess) {
+    const session = await getSessionFromReq(request);
+    if (session?.user) request.user = session.user;
+    return;
   }
 
-  const session = await getSessionFromReq(request);
-  if (session?.user) request.user = session.user;
+  if (apiKeyResult.rateLimited) {
+    return reply.status(429).send({ error: "Rate limit exceeded" });
+  }
+
+  return reply.status(403).send({ error: "Forbidden" });
 };
 
 /**
@@ -127,6 +158,7 @@ export const allowPublicSiteAccess: AuthMiddleware = async (request, reply) => {
 
   const apiKeyResult = await checkApiKey(request, { siteId });
   if (apiKeyResult.valid) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
   }
 
@@ -135,6 +167,10 @@ export const allowPublicSiteAccess: AuthMiddleware = async (request, reply) => {
     const session = await getSessionFromReq(request);
     if (session?.user) request.user = session.user;
     return;
+  }
+
+  if (apiKeyResult.rateLimited) {
+    return reply.status(429).send({ error: "Rate limit exceeded" });
   }
 
   return reply.status(403).send({ error: "Forbidden" });
@@ -153,16 +189,22 @@ export const requireOrgMember: AuthMiddleware = async (request, reply) => {
 
   const apiKeyResult = await checkApiKey(request, { organizationId });
   if (apiKeyResult.valid) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
   }
 
   const isMember = await getUserIsInOrg(request, organizationId);
-  if (!isMember) {
-    return reply.status(403).send({ error: "Forbidden" });
+  if (isMember) {
+    const session = await getSessionFromReq(request);
+    if (session?.user) request.user = session.user;
+    return;
   }
 
-  const session = await getSessionFromReq(request);
-  if (session?.user) request.user = session.user;
+  if (apiKeyResult.rateLimited) {
+    return reply.status(429).send({ error: "Rate limit exceeded" });
+  }
+
+  return reply.status(403).send({ error: "Forbidden" });
 };
 
 /**
@@ -181,12 +223,16 @@ export const requireOrgAdminFromParams: AuthMiddleware = async (request, reply) 
   // Check API key first - must have admin/owner role
   const apiKeyResult = await checkApiKey(request, { organizationId });
   if (apiKeyResult.valid && (apiKeyResult.role === "admin" || apiKeyResult.role === "owner")) {
+    attachApiKeyUser(request, apiKeyResult);
     return;
   }
 
   // Check session-based access - must be admin/owner of org
   const session = await getSessionFromReq(request);
   if (!session?.user?.id) {
+    if (apiKeyResult.rateLimited) {
+      return reply.status(429).send({ error: "Rate limit exceeded" });
+    }
     return reply.status(401).send({ error: "Unauthorized" });
   }
 

@@ -2,7 +2,15 @@
 export * from "./types";
 
 // Overview endpoints
-export { fetchOverview, fetchOverviewBucketed, fetchMetric, fetchLiveUserCount } from "./overview";
+export {
+  fetchOverview,
+  fetchOverviewBucketed,
+  fetchMetric,
+  fetchLiveUserCount,
+  fetchOverviewLite,
+  fetchOverviewBucketedLite,
+  fetchMetricLite,
+} from "./overview";
 export type {
   GetOverviewResponse,
   GetOverviewBucketedResponse,
@@ -11,19 +19,53 @@ export type {
 } from "./overview";
 
 // Events endpoints
-export { fetchEventBucketed, fetchEvents, fetchEventNames, fetchEventProperties, fetchOutboundLinks } from "./events";
+export {
+  fetchEventBucketed,
+  fetchNewEvents,
+  fetchEventsCursor,
+  fetchEventNames,
+  fetchEventProperties,
+  fetchAutocaptureEvents,
+  fetchAutocaptureValues,
+  fetchOutboundLinks,
+  fetchSiteEventCount,
+} from "./events";
 export type {
   Event,
   EventBucketedPoint,
-  EventsResponse,
+  NewEventsResponse,
+  CursorEventsResponse,
   EventName,
   EventProperty,
+  AutocaptureEvent,
+  AutocaptureValue,
   OutboundLink,
   EventBucketedParams,
-  EventsParams,
   EventPropertiesParams,
+  SiteEventCountPoint,
+  SiteEventCountParams,
 } from "./events";
 
+// Dashboards endpoints
+export {
+  fetchDashboards,
+  fetchDashboard,
+  createDashboard,
+  updateDashboard,
+  deleteDashboard,
+  runDashboardCard,
+} from "./dashboards";
+export type { RunDashboardCardBody } from "./dashboards";
+
+// Custom query endpoints
+export { generateCustomQuery, runCustomQuery } from "./customQuery";
+export type {
+  CustomQueryGenerationMessage,
+  CustomQueryRow,
+  GenerateCustomQueryRequest,
+  GenerateCustomQueryResponse,
+  RunCustomQueryResponse,
+} from "./customQuery";
 
 // Errors endpoints
 export { fetchErrorNames, fetchErrorEvents, fetchErrorBucketed } from "./errors";
@@ -41,22 +83,69 @@ export type {
 } from "./errors";
 
 // Goals endpoints
-export { fetchGoals, fetchGoalSessions, createGoal, updateGoal, deleteGoal } from "./goals";
+export { fetchGoals, fetchGoalTimeSeries, fetchGoalSessions, createGoal, updateGoal, deleteGoal } from "./goals";
 export type {
   Goal,
+  GoalType,
+  GoalConfig,
+  GoalTimeSeriesPoint,
   PaginationMeta,
   GoalsResponse,
   GoalsParams,
+  GoalTimeSeriesParams,
   GoalSessionsParams,
   CreateGoalParams,
   UpdateGoalParams,
 } from "./goals";
 
+// Feature flag endpoints
+export { fetchFeatureFlags, createFeatureFlag, updateFeatureFlag, deleteFeatureFlag } from "./featureFlags";
+export type {
+  FeatureFlag,
+  FeatureFlagConditionSet,
+  FeatureFlagPayload,
+  FeatureFlagPayloadValue,
+  FeatureFlagRule,
+  FeatureFlagRuntime,
+  FeatureFlagStats,
+  FeatureFlagType,
+  FeatureFlagUpdatePayload,
+  FeatureFlagVariant,
+} from "./featureFlags";
+
+// Experiment endpoints
+export {
+  createExperiment,
+  deleteExperiment,
+  fetchExperimentResults,
+  fetchExperiments,
+  updateExperiment,
+} from "./experiments";
+export type {
+  Experiment,
+  ExperimentFeatureFlag,
+  ExperimentGoal,
+  ExperimentPayload,
+  ExperimentResults,
+  ExperimentStatus,
+  ExperimentUpdatePayload,
+  ExperimentVariantResult,
+} from "./experiments";
+
 // Funnels endpoints
-export { fetchFunnels, analyzeFunnel, fetchFunnelStepSessions, saveFunnel, deleteFunnel } from "./funnels";
+export {
+  fetchFunnels,
+  analyzeFunnel,
+  fetchFunnelStepSessions,
+  saveFunnel,
+  deleteFunnel,
+  stepRequiresValue,
+  hasIncompleteSteps,
+} from "./funnels";
 export type {
   SavedFunnel,
   FunnelStep,
+  FunnelStepType,
   FunnelRequest,
   SaveFunnelRequest,
   FunnelResponse,
@@ -76,6 +165,21 @@ export type {
   PerformanceByDimensionParams,
   PaginatedPerformanceResponse,
 } from "./performance";
+
+// Bots endpoints
+export { fetchBotDimension, fetchBotOverview, fetchBotTimeSeries } from "./bots";
+export type {
+  BotDimensionKey,
+  BotDimensionItem,
+  BotDimensionParams,
+  BotLayerKey,
+  BotOverviewParams,
+  BotTimeSeriesParams,
+  BotTimeSeriesPoint,
+  GetBotOverviewResponse,
+  GetBotTimeSeriesResponse,
+  PaginatedBotDimensionResponse,
+} from "./bots";
 
 // Sessions endpoints
 export { fetchSessions, fetchSession, fetchSessionLocations } from "./sessions";
@@ -131,6 +235,19 @@ export type {
   GetSessionReplayEventsResponse,
   SessionReplaysParams,
 } from "./sessionReplay";
+
+// User Traits endpoints
+export { fetchUserTraitKeys, fetchUserTraitValues, fetchUserTraitValueUsers } from "./userTraits";
+export type {
+  TraitKey,
+  TraitKeysResponse,
+  TraitValue,
+  TraitValuesResponse,
+  TraitValuesParams,
+  TraitValueUser,
+  TraitValueUsersResponse,
+  TraitValueUsersParams,
+} from "./userTraits";
 
 // Export endpoints
 export { exportPdfReport } from "./export";

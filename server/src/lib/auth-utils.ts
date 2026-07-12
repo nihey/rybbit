@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { FastifyRequest } from "fastify";
 import NodeCache from "node-cache";
 import { db } from "../db/postgres/postgres.js";
-import { member, memberSiteAccess, sites, user } from "../db/postgres/schema.js";
+import { member, memberSiteAccess, sites, user, team, teamMember, teamSiteAccess } from "../db/postgres/schema.js";
 import { auth } from "./auth.js";
 import { siteConfig } from "./siteConfig.js";
 import { logger } from "./logger/logger.js";
@@ -43,9 +43,8 @@ const sitesAccessCache = new NodeCache({
 });
 
 export async function getSitesUserHasAccessTo(req: FastifyRequest, adminOnly = false) {
-  const session = await getSessionFromReq(req);
-
-  const userId = session?.user.id;
+  const session = req.user?.id ? null : await getSessionFromReq(req);
+  const userId = req.user?.id ?? session?.user.id;
 
   if (!userId) {
     return [];
@@ -143,6 +142,89 @@ export async function getSitesUserHasAccessTo(req: FastifyRequest, adminOnly = f
         }
       }
 
+      // Apply team-based filtering for non-admin/owner members
+      // Members who have full org access (not restricted) still need team filtering
+      const memberOrgIds = memberRecords.filter(r => r.role === "member").map(r => r.organizationId);
+
+      if (memberOrgIds.length > 0) {
+        // Find all team-gated sites in the member's orgs
+        const allTeamSites = await db
+          .select({ siteId: teamSiteAccess.siteId })
+          .from(teamSiteAccess)
+          .innerJoin(team, eq(teamSiteAccess.teamId, team.id))
+          .where(inArray(team.organizationId, memberOrgIds));
+
+        const teamGatedSiteIds = new Set(allTeamSites.map(s => s.siteId));
+
+        if (teamGatedSiteIds.size > 0) {
+          // Find teams the user belongs to
+          const userTeams = await db
+            .select({ teamId: teamMember.teamId })
+            .from(teamMember)
+            .where(eq(teamMember.userId, userId));
+
+          const userTeamSiteIds = new Set<number>();
+          if (userTeams.length > 0) {
+            const userTeamSites = await db
+              .select({ siteId: teamSiteAccess.siteId })
+              .from(teamSiteAccess)
+              .where(
+                inArray(
+                  teamSiteAccess.teamId,
+                  userTeams.map(t => t.teamId)
+                )
+              );
+            for (const s of userTeamSites) {
+              userTeamSiteIds.add(s.siteId);
+            }
+          }
+
+          // Team access is additive: a restricted member's siteMap only has
+          // their explicit grants, so team-granted sites must be added back
+          const memberOrgIdSet = new Set(memberOrgIds);
+          const missingTeamSiteIds = Array.from(userTeamSiteIds).filter(id => !siteMap.has(id));
+          if (missingTeamSiteIds.length > 0) {
+            const teamSites = await db.select().from(sites).where(inArray(sites.siteId, missingTeamSiteIds));
+            for (const site of teamSites) {
+              if (site.organizationId && memberOrgIdSet.has(site.organizationId)) {
+                siteMap.set(site.siteId, site);
+              }
+            }
+          }
+
+          // For sites from admin/owner orgs, keep all (no team filtering)
+          // For sites from member orgs, apply team filtering
+          const adminOrgSiteIds = new Set<number>();
+          if (fullAccessOrgIds.length > 0) {
+            // Sites from orgs where user is admin/owner should not be team-filtered
+            for (const record of memberRecords) {
+              if (record.role === "admin" || record.role === "owner") {
+                for (const [siteId, site] of siteMap) {
+                  if (site.organizationId === record.organizationId) {
+                    adminOrgSiteIds.add(siteId);
+                  }
+                }
+              }
+            }
+          }
+
+          // Explicit per-member grants always win over team gating
+          const explicitGrantSiteIds = new Set(restrictedSites.map(s => s.siteId));
+
+          // Remove team-gated sites the user can't access (only for member-role orgs)
+          for (const [siteId] of siteMap) {
+            if (
+              teamGatedSiteIds.has(siteId) &&
+              !userTeamSiteIds.has(siteId) &&
+              !adminOrgSiteIds.has(siteId) &&
+              !explicitGrantSiteIds.has(siteId)
+            ) {
+              siteMap.delete(siteId);
+            }
+          }
+        }
+      }
+
       return Array.from(siteMap.values());
     } catch (error) {
       console.error("Error getting sites user has access to:", error);
@@ -164,7 +246,14 @@ export function invalidateSitesAccessCache(userId: string) {
   sitesAccessCache.del(`${userId}:false`);
 }
 
-export async function checkApiKey(req: FastifyRequest, options: { organizationId?: string; siteId?: string | number }) {
+/**
+ * Verify an API key from the request and check organization membership.
+ * Returns rateLimited flag when the key is rejected due to rate limiting.
+ */
+export async function checkApiKey(
+  req: FastifyRequest,
+  options: { organizationId?: string; siteId?: string | number }
+): Promise<{ valid: boolean; role: string | null; userId?: string; rateLimited?: boolean }> {
   // Check if a valid API key was provided
   // Priority: 1. Authorization: Bearer header (recommended), 2. Query parameter (testing only)
   const authHeader = req.headers["authorization"];
@@ -183,7 +272,7 @@ export async function checkApiKey(req: FastifyRequest, options: { organizationId
 
       if (result.valid && result.key) {
         // Get the userId from the API key
-        const apiKeyUserId = result.key.userId;
+        const apiKeyUserId = result.key.referenceId;
 
         // Determine the organization ID - either directly provided or looked up from site
         let organizationId = options.organizationId;
@@ -212,10 +301,15 @@ export async function checkApiKey(req: FastifyRequest, options: { organizationId
             .limit(1);
 
           if (userMembership.length > 0) {
-            return { valid: true, role: userMembership[0].role };
+            return { valid: true, role: userMembership[0].role, userId: apiKeyUserId };
           }
         }
         return { valid: false, role: null };
+      }
+
+      // Check if the key was rejected due to rate limiting
+      if (!result.valid && result.error?.code === "RATE_LIMITED") {
+        return { valid: false, role: null, rateLimited: true };
       }
     } catch (error) {
       logger.error(error, "Error verifying API key");
@@ -226,6 +320,10 @@ export async function checkApiKey(req: FastifyRequest, options: { organizationId
 }
 
 export async function getUserIdFromRequest(req: FastifyRequest): Promise<string | null> {
+  if (req.user?.id) {
+    return req.user.id;
+  }
+
   // First, check for session-based auth
   const session = await getSessionFromReq(req);
   if (session?.user?.id) {
@@ -244,8 +342,8 @@ export async function getUserIdFromRequest(req: FastifyRequest): Promise<string 
       const result = await auth.api.verifyApiKey({
         body: { key: apiKey },
       });
-      if (result.valid && result.key?.userId) {
-        return result.key.userId;
+      if (result.valid && result.key?.referenceId) {
+        return result.key.referenceId;
       }
     } catch (error) {
       logger.error(error, "Error verifying API key");

@@ -1,8 +1,9 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { db } from "../../db/postgres/postgres.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { member, organization, sites, user } from "../../db/postgres/schema.js";
 import { getUserIdFromRequest } from "../../lib/auth-utils.js";
+import { filterSitesByMemberAccess } from "../../lib/siteAccess.js";
 
 export const getMyOrganizations = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -28,7 +29,7 @@ export const getMyOrganizations = async (request: FastifyRequest, reply: Fastify
     // For each organization, get all members with user details and sites
     const organizationsWithMembersAndSites = await Promise.all(
       userOrganizations.map(async org => {
-        const [organizationMembers, organizationSites] = await Promise.all([
+        const [organizationMembers, allOrgSites, callerMember] = await Promise.all([
           db
             .select({
               id: member.id,
@@ -59,7 +60,31 @@ export const getMyOrganizations = async (request: FastifyRequest, reply: Fastify
             })
             .from(sites)
             .where(eq(sites.organizationId, org.id)),
+          db
+            .select({
+              id: member.id,
+              role: member.role,
+              hasRestrictedSiteAccess: member.hasRestrictedSiteAccess,
+            })
+            .from(member)
+            .where(and(eq(member.organizationId, org.id), eq(member.userId, userId)))
+            .limit(1),
         ]);
+
+        // Filter sites based on the caller's per-member access restrictions
+        // and teams. Admins/owners see everything.
+        let organizationSites = allOrgSites;
+        const callerMemberRecord = callerMember[0];
+
+        if (callerMemberRecord?.role === "member") {
+          organizationSites = await filterSitesByMemberAccess(
+            allOrgSites,
+            org.id,
+            userId,
+            callerMemberRecord.id,
+            callerMemberRecord.hasRestrictedSiteAccess
+          );
+        }
 
         return {
           id: org.id,

@@ -2,24 +2,27 @@
 export {
   addSite,
   deleteSite,
+  moveSite,
   updateSiteConfig,
   fetchSite,
   fetchSitesFromOrg,
   fetchSiteHasData,
   fetchSiteIsPublic,
-  verifyScript,
+  fetchSiteUsage,
 } from "./sites";
-export type { SiteResponse, GetSitesFromOrgResponse, VerifyScriptResponse } from "./sites";
+export type { SiteResponse, GetSitesFromOrgResponse, SiteUsageResponse } from "./sites";
 
 // Organizations endpoints
 export {
   getUserOrganizations,
   addUserToOrganization,
+  createUserInOrganization,
   USER_ORGANIZATIONS_QUERY_KEY,
 } from "./organizations";
 export type {
   UserOrganization,
   AddUserToOrganizationInput,
+  CreateUserInOrganizationInput,
   RemoveUserFromOrganizationInput,
 } from "./organizations";
 
@@ -28,7 +31,7 @@ export { getAdminOrganizations } from "./adminOrganizations";
 export type { AdminOrganizationData } from "./adminOrganizations";
 
 // Admin Sites endpoints
-export { getAdminSites } from "./adminSites";
+export { getAdminSites, adminMoveSite } from "./adminSites";
 export type { AdminSiteData } from "./adminSites";
 
 // Admin Service Event Count endpoints
@@ -55,16 +58,30 @@ export type {
   UpdateExcludedCountriesResponse,
 } from "./excludedCountries";
 
+// Excluded Paths / Hostnames / User Agents endpoints
+export {
+  fetchExcludedPaths,
+  updateExcludedPaths,
+  fetchExcludedHostnames,
+  updateExcludedHostnames,
+  fetchExcludedUserAgents,
+  updateExcludedUserAgents,
+} from "./exclusions";
+export type {
+  ExcludedPathsResponse,
+  ExcludedHostnamesResponse,
+  ExcludedUserAgentsResponse,
+  UpdateExcludedPathsRequest,
+  UpdateExcludedHostnamesRequest,
+  UpdateExcludedUserAgentsRequest,
+} from "./exclusions";
+
 // Account Settings endpoints
 export { updateAccountSettings } from "./accountSettings";
 export type {
   UpdateAccountSettingsRequest,
   UpdateAccountSettingsResponse,
 } from "./accountSettings";
-
-// User API Keys endpoints
-export { listApiKeys, createApiKey, deleteApiKey } from "./userApiKeys";
-export type { ApiKey, ApiKeyWithKey, CreateApiKeyRequest } from "./userApiKeys";
 
 // Private Link endpoints
 export {
@@ -84,3 +101,32 @@ export type { GetSiteImportsResponse, CreateSiteImportResponse } from "./import"
 // Auth endpoints
 export { getOrganizationMembers } from "./auth";
 export type { GetOrganizationMembersResponse } from "./auth";
+
+// Teams endpoints
+export {
+  fetchTeams,
+  createTeam,
+  updateTeam,
+  deleteTeam,
+} from "./teams";
+export type {
+  Team,
+  TeamMember,
+  TeamSite,
+  ListTeamsResponse,
+  CreateTeamInput,
+  UpdateTeamInput,
+} from "./teams";
+
+// ClickHouse Stats endpoints
+export { getClickhouseStats, getClickhouseQueryLog } from "./clickhouseStats";
+export type {
+  TableStats,
+  RowsByDate,
+  InsertRate,
+  QueryError,
+  ClickhouseStatsResponse,
+  QueryLogEntry,
+  ClickhouseQueryLogResponse,
+  QueryLogParams,
+} from "./clickhouseStats";

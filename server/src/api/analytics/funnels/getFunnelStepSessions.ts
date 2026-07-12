@@ -1,23 +1,10 @@
 import { FilterParams } from "@rybbit/shared";
 import { FastifyReply, FastifyRequest } from "fastify";
-import SqlString from "sqlstring";
 import { clickhouse } from "../../../db/clickhouse/clickhouse.js";
-import { getTimeStatement, patternToRegex, processResults } from "../utils/utils.js";
-import { GetSessionsResponse } from "../getSessions.js";
+import { enrichWithTraits, getTimeStatement, processResults } from "../utils/utils.js";
+import { GetSessionsResponse } from "../sessions/getSessions.js";
 import { getFilterStatement } from "../utils/getFilterStatement.js";
-
-type FunnelStep = {
-  value: string;
-  name?: string;
-  type: "page" | "event";
-  hostname?: string;
-  eventPropertyKey?: string;
-  eventPropertyValue?: string | number | boolean;
-  propertyFilters?: Array<{
-    key: string;
-    value: string | number | boolean;
-  }>;
-};
+import { buildFunnelStepCondition, FunnelStep } from "./funnelSteps.js";
 
 type Funnel = {
   steps: FunnelStep[];
@@ -64,66 +51,15 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
   try {
     const timeStatement = getTimeStatement(req.query);
 
-    // Use fieldMappings since the CTE extracts UTM params as separate columns
-    const filterStatement = getFilterStatement(req.query.filters, Number(siteId), timeStatement, {
-      fieldMappings: {
-        "url_parameters['utm_source']": "utm_source",
-        "url_parameters['utm_medium']": "utm_medium",
-        "url_parameters['utm_campaign']": "utm_campaign",
-        "url_parameters['utm_term']": "utm_term",
-        "url_parameters['utm_content']": "utm_content",
-      },
-    });
+    // Applied once, in the SessionActions CTE against raw events (same as the
+    // funnel analyze endpoint), where every filter parameter's column exists.
+    // Re-applying it to the aggregated outer query breaks on parameters the
+    // aggregate doesn't project (utm_*, pathname, timezone → unknown identifier).
+    const filterStatement = getFilterStatement(req.query.filters, Number(siteId), timeStatement);
 
     // Build conditional statements for each step we need
     const stepsToCheck = mode === "reached" ? stepNumber : stepNumber + 1;
-    const stepConditions = steps.slice(0, stepsToCheck).map((step) => {
-      let condition = "";
-
-      if (step.type === "page") {
-        const regex = patternToRegex(step.value);
-        condition = `type = 'pageview' AND match(pathname, ${SqlString.escape(regex)})`;
-
-        // Support both new propertyFilters array and legacy single property
-        const filters = step.propertyFilters || (
-          step.eventPropertyKey && step.eventPropertyValue !== undefined
-            ? [{ key: step.eventPropertyKey, value: step.eventPropertyValue }]
-            : []
-        );
-
-        // Add property matching for page steps (URL parameters)
-        for (const filter of filters) {
-          const propValueAccessor = `url_parameters[${SqlString.escape(filter.key)}]`;
-          condition += ` AND ${propValueAccessor} = ${SqlString.escape(String(filter.value))}`;
-        }
-      } else {
-        condition = `type = 'custom_event' AND event_name = ${SqlString.escape(step.value)}`;
-
-        // Support both new propertyFilters array and legacy single property
-        const filters = step.propertyFilters || (
-          step.eventPropertyKey && step.eventPropertyValue !== undefined
-            ? [{ key: step.eventPropertyKey, value: step.eventPropertyValue }]
-            : []
-        );
-
-        // Add property matching for event steps
-        for (const filter of filters) {
-          if (typeof filter.value === "string") {
-            condition += ` AND JSONExtractString(toString(props), ${SqlString.escape(filter.key)}) = ${SqlString.escape(filter.value)}`;
-          } else if (typeof filter.value === "number") {
-            condition += ` AND toFloat64(JSONExtractString(toString(props), ${SqlString.escape(filter.key)})) = ${SqlString.escape(filter.value)}`;
-          } else if (typeof filter.value === "boolean") {
-            condition += ` AND JSONExtractString(toString(props), ${SqlString.escape(filter.key)}) = ${SqlString.escape(filter.value ? 'true' : 'false')}`;
-          }
-        }
-      }
-
-      if (step.hostname) {
-        condition += ` AND hostname = ${SqlString.escape(step.hostname)}`;
-      }
-
-      return condition;
-    });
+    const stepConditions = steps.slice(0, stepsToCheck).map(step => buildFunnelStepCondition(step));
 
     // Build CTEs for each funnel step to identify qualifying sessions
     const stepCTEs = [
@@ -137,7 +73,8 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
         type,
         props,
         hostname,
-        url_parameters
+        url_parameters,
+        tag
       FROM events
       WHERE
         site_id = {siteId:Int32}
@@ -203,6 +140,7 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
       SELECT
         e.session_id,
         e.user_id,
+        argMax(e.identified_user_id, e.timestamp) AS identified_user_id,
         argMax(e.country, e.timestamp) AS country,
         argMax(e.region, e.timestamp) AS region,
         argMax(e.city, e.timestamp) AS city,
@@ -235,7 +173,8 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
         countIf(e.type = 'outbound') AS outbound,
         argMax(e.ip, e.timestamp) AS ip,
         argMax(e.lat, e.timestamp) AS lat,
-        argMax(e.lon, e.timestamp) AS lon
+        argMax(e.lon, e.timestamp) AS lon,
+        argMax(e.tag, e.timestamp) AS tag
       FROM events e
       INNER JOIN TargetSessions ts ON e.session_id = ts.session_id
       WHERE
@@ -248,7 +187,6 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
     )
     SELECT *
     FROM AggregatedSessions
-    WHERE 1 = 1 ${filterStatement}
     LIMIT {limit:Int32} OFFSET {offset:Int32}
     `;
 
@@ -258,12 +196,13 @@ export async function getFunnelStepSessions(req: FastifyRequest<GetFunnelStepSes
       query_params: {
         siteId: Number(siteId),
         limit: limit || 25,
-        offset: (page - 1) * (limit || 25),
+        offset: ((page || 1) - 1) * (limit || 25),
       },
     });
 
-    const data = await processResults<GetSessionsResponse[number]>(result);
-    return res.send({ data });
+    const data = await processResults<Omit<GetSessionsResponse[number], "traits">>(result);
+    const dataWithTraits = await enrichWithTraits(data, Number(siteId));
+    return res.send({ data: dataWithTraits });
   } catch (error) {
     console.error("Error fetching funnel step sessions:", error);
     return res.status(500).send({ error: "Failed to fetch funnel step sessions" });
