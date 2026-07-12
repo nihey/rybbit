@@ -43,7 +43,9 @@ services:
 
   redis:
     image: redis:8.6.4-alpine
-    container_name: redis
+    # Unique name: on shared multi-project networks (e.g. Dokploy) a generic
+    # "redis" alias can resolve to another project's redis container
+    container_name: rybbit-redis
     volumes:
       - redis-data:/data
     healthcheck:
@@ -84,7 +86,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-analytics}
       - POSTGRES_USER=${POSTGRES_USER:-frog}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-frog}
-      - REDIS_HOST=redis
+      - REDIS_HOST=rybbit-redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
